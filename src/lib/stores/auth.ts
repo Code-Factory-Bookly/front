@@ -2,7 +2,7 @@ import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
 import { tokenStore } from '$lib/services/api';
 import { apiFetch } from '$lib/services/api';
-import type { User, UserRole } from '$lib/types/auth';
+import type { RegisterResponse, User, UserRole } from '$lib/types/auth';
 
 interface AuthState {
   user: User | null;
@@ -125,6 +125,22 @@ function createAuthStore() {
     }
   }
 
+  async function register(email: string, password: string, fullName: string) {
+    store.update((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const response = await apiFetch<RegisterResponse>('/auth/register', {
+        method: 'POST',
+        json: { email: email.trim().toLowerCase(), password, fullName: fullName.trim() }
+      });
+      store.update((s) => ({ ...s, loading: false }));
+      return response;
+    } catch (err) {
+      const message = (err as { message?: string })?.message ?? 'No pudimos crear la cuenta.';
+      store.update((s) => ({ ...s, loading: false, error: message }));
+      throw err;
+    }
+  }
+
   function logout() {
     tokenStore.clear();
     writeCachedUser(null);
@@ -135,6 +151,7 @@ function createAuthStore() {
     subscribe: store.subscribe,
     bootstrap,
     login,
+    register,
     logout
   };
 }

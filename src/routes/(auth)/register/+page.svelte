@@ -5,48 +5,52 @@
   import { goto } from '$app/navigation';
   import { toasts } from '$lib/stores/toasts';
 
+  let fullName = $state('');
   let email = $state('');
   let password = $state('');
+  let fullNameError = $state<string | null>(null);
   let emailError = $state<string | null>(null);
   let passwordError = $state<string | null>(null);
   let submitting = $state(false);
 
+  const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/;
+
   async function onSubmit(e: SubmitEvent) {
     e.preventDefault();
+    fullNameError = null;
     emailError = null;
     passwordError = null;
 
-    const trimmed = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    const trimmedName = fullName.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedName) {
+      fullNameError = 'El nombre completo es obligatorio.';
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       emailError = 'Introduce un correo válido.';
       return;
     }
-    if (password.length < 8) {
-      passwordError = 'La contraseña debe tener al menos 8 caracteres.';
+    if (password.length < 8 || password.length > 64 || !PASSWORD_RULE.test(password)) {
+      passwordError =
+        'Debe tener entre 8 y 64 caracteres, con mayúscula, minúscula, número y carácter especial.';
       return;
     }
 
     submitting = true;
     try {
-      const user = await auth.login(trimmed, password);
-      const target =
-        user.role === 'ADMIN'
-          ? '/admin'
-          : user.role === 'PROFESSIONAL'
-            ? '/professional'
-            : '/customer';
-      toasts.push('Sesión iniciada.', 'success');
-      await goto(target);
+      await auth.register(trimmedEmail, password, trimmedName);
+      toasts.push('Cuenta creada. Ya puedes iniciar sesión.', 'success');
+      await goto('/login');
     } catch (err) {
-      const e = err as { message?: string; errorCode?: string; status?: number; details?: Record<string, string> };
+      const e = err as { message?: string; errorCode?: string; details?: Record<string, string> };
       if (e.details?.email) emailError = e.details.email;
       if (e.details?.password) passwordError = e.details.password;
-      const msg =
-        e.message ??
-        (e.status === 401 || e.errorCode === 'ACCOUNT_LOCKED'
-          ? 'Credenciales inválidas o cuenta bloqueada temporalmente.'
-          : 'No pudimos iniciar sesión.');
-      toasts.push(msg, 'danger');
+      if (e.details?.fullName) fullNameError = e.details.fullName;
+      if (!e.details?.email && !e.details?.password && !e.details?.fullName) {
+        toasts.push(e.message ?? 'No pudimos crear la cuenta.', 'danger');
+      }
     } finally {
       submitting = false;
     }
@@ -54,17 +58,25 @@
 </script>
 
 <svelte:head>
-  <title>Iniciar sesión · BOOKLY</title>
+  <title>Crear cuenta · BOOKLY</title>
 </svelte:head>
 
 <div class="card">
   <header class="card__head">
-    <p class="eyebrow">Acceso</p>
-    <h1 class="card__title">Bienvenida de nuevo.</h1>
-    <p class="card__lede">Inicia sesión para administrar servicios y profesionales.</p>
+    <p class="eyebrow">Registro</p>
+    <h1 class="card__title">Crea tu cuenta.</h1>
+    <p class="card__lede">Regístrate para reservar servicios y gestionar tus citas.</p>
   </header>
 
   <form class="form" onsubmit={onSubmit} novalidate>
+    <Field
+      label="Nombre completo"
+      placeholder="Tu nombre completo"
+      bind:value={fullName}
+      error={fullNameError}
+      autocomplete="name"
+      required
+    />
     <Field
       label="Correo electrónico"
       type="email"
@@ -77,19 +89,19 @@
     <Field
       label="Contraseña"
       type="password"
-      placeholder="Tu contraseña"
+      placeholder="Mayúscula, minúscula, número y símbolo"
       bind:value={password}
       error={passwordError}
-      autocomplete="current-password"
+      autocomplete="new-password"
       required
     />
     <div class="form__actions">
-      <Button type="submit" size="lg" loading={submitting}>Entrar</Button>
+      <Button type="submit" size="lg" loading={submitting}>Crear cuenta</Button>
     </div>
   </form>
 
   <p class="card__footer">
-    ¿No tienes cuenta? <a href="/register">Regístrate</a>
+    ¿Ya tienes cuenta? <a href="/login">Inicia sesión</a>
   </p>
 </div>
 
