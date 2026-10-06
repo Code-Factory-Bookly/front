@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Eye, EyeOff } from 'lucide-svelte';
+
   interface Props {
     label?: string;
     value?: string;
@@ -34,6 +36,9 @@
   }: Props = $props();
 
   const fieldId = $derived(id ?? `field-${Math.random().toString(36).slice(2, 8)}`);
+  const isPassword = $derived(type === 'password');
+  let revealed = $state(false);
+  const inputType = $derived(isPassword && revealed ? 'text' : type);
 </script>
 
 <div class="field" class:has-error={!!error}>
@@ -43,22 +48,37 @@
       {#if required}<span class="field__required" aria-hidden="true">*</span>{/if}
     </label>
   {/if}
-  <input
-    id={fieldId}
-    {name}
-    {type}
-    {placeholder}
-    {disabled}
-    {required}
-    {autocomplete}
-    {min}
-    {max}
-    {step}
-    bind:value
-    aria-invalid={!!error}
-    aria-describedby={error ? `${fieldId}-err` : helper ? `${fieldId}-help` : undefined}
-    class="field__input"
-  />
+  <div class="field__control">
+    <input
+      id={fieldId}
+      {name}
+      type={inputType}
+      {placeholder}
+      {disabled}
+      {required}
+      {autocomplete}
+      {min}
+      {max}
+      {step}
+      bind:value
+      aria-invalid={!!error}
+      aria-describedby={error ? `${fieldId}-err` : helper ? `${fieldId}-help` : undefined}
+      class="field__input"
+      class:field__input--toggle={isPassword}
+    />
+    {#if isPassword}
+      <button
+        type="button"
+        class="field__toggle"
+        onclick={() => (revealed = !revealed)}
+        aria-label={revealed ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+        aria-pressed={revealed}
+        disabled={disabled}
+      >
+        {#if revealed}<EyeOff size={18} aria-hidden="true" />{:else}<Eye size={18} aria-hidden="true" />{/if}
+      </button>
+    {/if}
+  </div>
   {#if error}
     <p id="{fieldId}-err" class="field__error">{error}</p>
   {:else if helper}
@@ -84,6 +104,11 @@
   .field__required {
     color: $coral;
     margin-left: 2px;
+  }
+
+  .field__control {
+    position: relative;
+    width: 100%;
   }
 
   .field__input {
@@ -117,6 +142,42 @@
       background: $ivory;
       color: $muted;
       cursor: not-allowed;
+    }
+  }
+
+  .field__input--toggle {
+    padding-right: 48px;
+  }
+
+  .field__toggle {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: $radius-sm;
+    color: $muted;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      color: $text;
+    }
+
+    &:focus-visible {
+      outline: 2px solid $plum;
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
     }
   }
 
