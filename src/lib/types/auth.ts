@@ -28,3 +28,22 @@ export interface ApiError {
   status: number;
   details?: Record<string, string>;
 }
+export interface MfaChallenge {
+  mfaRequired: true;
+  mfaSetupRequired: boolean;
+  mfaToken: string;
+}
+
+export interface MfaEnrollment {
+  secret: string;
+  otpauthUri: string;
+}
+
+export interface MfaConfirmation {
+  session: { accessToken: string; tokenType: 'Bearer'; expiresIn: number; user: User; deviceToken?: string | null };
+  recoveryCodes: string[];
+}
+
+export interface MfaRecoveryStatus {
+  remaining: number;
+}

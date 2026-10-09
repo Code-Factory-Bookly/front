@@ -2,7 +2,15 @@ import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
 import { tokenStore } from '$lib/services/api';
 import { apiFetch } from '$lib/services/api';
-import type { RegisterResponse, User, UserRole } from '$lib/types/auth';
+import type {
+  MfaChallenge,
+  MfaConfirmation,
+  MfaEnrollment,
+  MfaRecoveryStatus,
+  RegisterResponse,
+  User,
+  UserRole
+} from '$lib/types/auth';
 
 interface AuthState {
   user: User | null;
@@ -19,6 +27,7 @@ const initial: AuthState = {
 };
 
 const USER_KEY = 'bookly.user';
+const DEVICE_KEY_PREFIX = 'bookly.device.';
 
 interface JwtPayload {
   sub?: string;
@@ -55,6 +64,19 @@ function writeCachedUser(user: User | null): void {
   if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
   else localStorage.removeItem(USER_KEY);
 }
+
+// "Confiar en este dispositivo": el token vive solo en este navegador, por correo, para no
+// pedir MFA de nuevo en los proximos 30 dias en el mismo equipo.
+const deviceStore = {
+  get(email: string): string | null {
+    if (!browser) return null;
+    return localStorage.getItem(DEVICE_KEY_PREFIX + email.trim().toLowerCase());
+  },
+  set(email: string, token: string): void {
+    if (!browser) return;
+    localStorage.setItem(DEVICE_KEY_PREFIX + email.trim().toLowerCase(), token);
+  }
+};
 
 function createAuthStore() {
   const store = writable<AuthState>(initial);
@@ -107,22 +129,82 @@ function createAuthStore() {
     }
   }
 
-  async function login(email: string, password: string) {
+  function startSession(session: { accessToken: string; user: User; deviceToken?: string | null }) {
+    tokenStore.set(session.accessToken);
+    writeCachedUser(session.user);
+    if (session.deviceToken) deviceStore.set(session.user.email, session.deviceToken);
+    store.set({ user: session.user, loading: false, ready: true, error: null });
+    return session.user;
+  }
+
+  async function login(email: string, password: string): Promise<{ user: User } | { challenge: MfaChallenge }> {
     store.update((s) => ({ ...s, loading: true, error: null }));
+    const trimmed = email.trim().toLowerCase();
     try {
-      const data = await apiFetch<{ accessToken: string; user: User }>('/auth/login', {
+      const data = await apiFetch<{ accessToken?: string; user?: User } & Partial<MfaChallenge>>('/auth/login', {
         method: 'POST',
-        json: { email: email.trim().toLowerCase(), password }
+        json: { email: trimmed, password, deviceToken: deviceStore.get(trimmed) }
       });
-      if (data?.accessToken) tokenStore.set(data.accessToken);
-      if (data?.user) writeCachedUser(data.user);
-      store.set({ user: data.user, loading: false, ready: true, error: null });
-      return data.user;
+      if (data.mfaRequired) {
+        store.update((s) => ({ ...s, loading: false }));
+        return { challenge: data as MfaChallenge };
+      }
+      return { user: startSession(data as { accessToken: string; user: User }) };
     } catch (err) {
       const message = (err as { message?: string })?.message ?? 'No pudimos iniciar sesión.';
       store.update((s) => ({ ...s, loading: false, error: message }));
       throw err;
     }
+  }
+
+  function mfaEnroll(mfaToken: string) {
+    return apiFetch<MfaEnrollment>('/auth/mfa/enroll', { method: 'POST', json: { mfaToken } });
+  }
+
+  async function mfaConfirmEnrollment(mfaToken: string, code: string, trustDevice: boolean) {
+    const data = await apiFetch<MfaConfirmation>('/auth/mfa/enroll/confirm', {
+      method: 'POST',
+      json: { mfaToken, code, trustDevice }
+    });
+    const user = startSession(data.session);
+    return { user, recoveryCodes: data.recoveryCodes };
+  }
+
+  async function mfaVerify(mfaToken: string, code: string, trustDevice: boolean) {
+    const data = await apiFetch<{ accessToken: string; user: User; deviceToken?: string | null }>(
+      '/auth/mfa/verify',
+      { method: 'POST', json: { mfaToken, code, trustDevice } }
+    );
+    return startSession(data);
+  }
+
+  // Omite la configuracion del segundo factor por esta vez; el backend no marca mfaEnabled, asi
+  // que el siguiente login vuelve a ofrecer este mismo paso.
+  async function mfaSkip(mfaToken: string) {
+    const data = await apiFetch<{ accessToken: string; user: User }>('/auth/mfa/skip', {
+      method: 'POST',
+      json: { mfaToken }
+    });
+    return startSession(data);
+  }
+
+  function mfaRecoveryStatus() {
+    return apiFetch<MfaRecoveryStatus>('/mfa/recovery-codes/estado');
+  }
+
+  function mfaRegenerateRecoveryCodes(code: string) {
+    return apiFetch<{ recoveryCodes: string[] }>('/mfa/recovery-codes/regenerar', {
+      method: 'POST',
+      json: { code }
+    });
+  }
+
+  function mfaDisable(password: string, code: string) {
+    return apiFetch<void>('/mfa/desactivar', { method: 'POST', json: { password, code } });
+  }
+
+  function changePassword(currentPassword: string, newPassword: string) {
+    return apiFetch<void>('/auth/password', { method: 'PUT', json: { currentPassword, newPassword } });
   }
 
   async function register(email: string, password: string, fullName: string) {
@@ -152,6 +234,14 @@ function createAuthStore() {
     bootstrap,
     login,
     register,
+    mfaEnroll,
+    mfaConfirmEnrollment,
+    mfaVerify,
+    mfaSkip,
+    mfaRecoveryStatus,
+    mfaRegenerateRecoveryCodes,
+    mfaDisable,
+    changePassword,
     logout
   };
 }
