@@ -184,48 +184,54 @@
   {/if}
 </section>
 
-<style>
+<style lang="scss">
+  @use '$lib/styles/tokens' as *;
+
   .card {
-    background: #fff;
-    border: 1px solid #e7e3ea;
-    border-radius: 12px;
-    padding: 20px;
+    background: $surface;
+    border: 1px solid $border;
+    border-radius: $radius-lg;
+    padding: $space-4;
     max-width: 560px;
     display: grid;
-    gap: 14px;
+    gap: $space-4;
+
+    @media (min-width: #{$bp-md}) {
+      padding: $space-5;
+    }
   }
   form {
     display: grid;
-    gap: 14px;
+    gap: $space-4;
   }
   .actions {
     display: flex;
     justify-content: flex-end;
   }
   .error {
-    color: #8a1c1c;
+    color: $danger;
     margin: 0;
-    font-size: 14px;
+    font-size: $fs-base;
   }
   .hint {
     margin: 0;
-    font-size: 14px;
-    color: #6b6475;
+    font-size: $fs-base;
+    color: $muted;
   }
   .result-msg {
     margin: 0;
-    padding: 12px 14px;
-    border-radius: 8px;
-    background: #eef6ee;
-    color: #1d4d1d;
-    font-size: 14px;
+    padding: $space-3 $space-4;
+    border-radius: $radius-sm;
+    background: rgba(94, 159, 122, 0.12);
+    color: $success;
+    font-size: $fs-base;
   }
   .results {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 8px;
+    gap: $space-2;
     max-height: 280px;
     overflow-y: auto;
   }
@@ -233,57 +239,66 @@
     width: 100%;
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: 2px 12px;
+    gap: 2px $space-3;
     text-align: left;
-    padding: 10px 12px;
-    border: 1px solid #e7e3ea;
-    border-radius: 8px;
-    background: #fafafa;
+    padding: $space-2 $space-3;
+    border: 1px solid $border;
+    border-radius: $radius-sm;
+    background: $bg;
     cursor: pointer;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      background var(--dur-fast) var(--ease-out);
   }
   .result:hover {
-    border-color: #382c46;
-    background: #f3f0f6;
+    border-color: $plum;
+    background: $plum-soft;
   }
   .result__name {
-    font-weight: 600;
+    font-weight: $fw-semibold;
     grid-column: 1;
   }
   .result__role {
     grid-column: 2;
     grid-row: 1 / span 2;
     align-self: center;
-    font-size: 12px;
-    color: #6b6475;
+    font-size: $fs-xs;
+    color: $muted;
   }
   .result__email {
     grid-column: 1;
-    font-size: 13px;
-    color: #6b6475;
+    font-size: $fs-sm;
+    color: $muted;
   }
   .selected {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
+    flex-direction: column;
+    gap: $space-2;
+
+    @media (min-width: #{$bp-md}) {
+      flex-direction: row;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: $space-3;
+    }
   }
   .selected__name {
     margin: 0;
-    font-weight: 600;
+    font-weight: $fw-semibold;
   }
   .selected__email {
     margin: 0;
-    font-size: 13px;
-    color: #6b6475;
+    font-size: $fs-sm;
+    color: $muted;
   }
   .linkish {
     background: none;
     border: none;
-    color: #382c46;
-    font-weight: 500;
+    color: $plum;
+    font-weight: $fw-medium;
     cursor: pointer;
     padding: 0;
-    font-size: 13px;
+    font-size: $fs-sm;
     white-space: nowrap;
   }
 </style>
