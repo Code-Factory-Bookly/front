@@ -11,3 +11,11 @@ export interface RoleAssignment {
   fullName: string;
   role: UserRole;
 }
+
+export interface UserSearchResult {
+  id: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  hasProfessionalProfile: boolean;
+}
