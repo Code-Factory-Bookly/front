@@ -6,7 +6,6 @@
   import StatusPill from '$lib/components/StatusPill.svelte';
   import Money from '$lib/components/Money.svelte';
   import { serviceService } from '$lib/services/service';
-  import { bookingService } from '$lib/services/booking';
   import { toasts } from '$lib/stores/toasts';
   import { auth } from '$lib/stores/auth';
   import { onMount } from 'svelte';
@@ -42,14 +41,10 @@
       loadingServices = false;
     }
 
-    try {
-      const dateStr = today.toISOString().slice(0, 10);
-      bookings = await bookingService.list({ date: dateStr });
-    } catch {
-      // No bloqueante en home.
-    } finally {
-      loadingAgenda = false;
-    }
+    // "Disponibilidad cercana" necesita saber de qué profesional, y esta sección todavía no
+    // elige uno. El backend solo expone reservas por profesional o por cliente (HU-08/HU-09);
+    // mostrar franjas libres reales aquí depende de la consulta de disponibilidad de HU-07.
+    loadingAgenda = false;
   });
 
   function handleSlotClick(slot: TimeSlot) {

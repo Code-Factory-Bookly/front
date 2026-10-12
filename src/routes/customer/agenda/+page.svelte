@@ -5,6 +5,7 @@
   import Button from '$lib/components/Button.svelte';
   import { bookingService } from '$lib/services/booking';
   import { toasts } from '$lib/stores/toasts';
+  import { auth } from '$lib/stores/auth';
   import { onMount } from 'svelte';
   import type { Booking } from '$lib/types/booking';
   import { Plus, Calendar as CalIcon } from 'lucide-svelte';
@@ -14,8 +15,13 @@
   let loading = $state(true);
 
   onMount(async () => {
+    const customerId = $auth.user?.id;
+    if (!customerId) {
+      loading = false;
+      return;
+    }
     try {
-      bookings = await bookingService.list({ date: new Date().toISOString().slice(0, 10) });
+      bookings = await bookingService.listByCustomer(customerId);
     } catch (err) {
       const msg = (err as { message?: string })?.message ?? 'No se pudieron cargar tus reservas.';
       toasts.push(msg, 'danger');
@@ -37,15 +43,20 @@
   }
 
   function statusLabel(s: Booking['status']) {
-    return s === 'CONFIRMED' ? 'Confirmada' : s === 'PENDING' ? 'Pendiente' : 'Cancelada';
+    if (s === 'CONFIRMADA') return 'Confirmada';
+    if (s === 'RESCHEDULED') return 'Reprogramada';
+    if (s === 'COMPLETED') return 'Completada';
+    return 'Cancelada';
   }
 
   function statusTone(s: Booking['status']) {
-    return s === 'CONFIRMED' ? 'success' : s === 'PENDING' ? 'info' : 'muted';
+    if (s === 'CONFIRMADA' || s === 'COMPLETED') return 'success';
+    if (s === 'RESCHEDULED') return 'info';
+    return 'muted';
   }
 
   const upcoming = $derived(
-    bookings.filter((b) => new Date(b.startTime) >= new Date() && b.status !== 'CANCELLED')
+    bookings.filter((b) => new Date(b.startTime) >= new Date() && b.status !== 'CANCELADA')
   );
 </script>
 
@@ -94,7 +105,7 @@
             </span>
           </div>
           <div class="booking__main">
-            <p class="booking__service">{b.serviceName}</p>
+            <p class="booking__service">{b.serviceName ?? 'Servicio'}</p>
             <p class="booking__meta">
               {fmtTime(b.startTime)} · {fmtDate(b.startTime)}
             </p>

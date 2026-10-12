@@ -6,7 +6,6 @@
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Money from '$lib/components/Money.svelte';
   import { serviceService } from '$lib/services/service';
-  import { bookingService } from '$lib/services/booking';
   import { toasts } from '$lib/stores/toasts';
   import { onMount } from 'svelte';
   import type { Service } from '$lib/types/service';
@@ -24,10 +23,6 @@
   let selectedSlot = $state<string | null>(null);
   let notFound = $state(false);
 
-  function toISODate(d: Date) {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
-
   function shiftDays(days: number) {
     const d = new Date(date);
     d.setDate(d.getDate() + days);
@@ -38,14 +33,10 @@
     return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
   }
 
-  async function loadBookings() {
-    try {
-      bookings = await bookingService.list({ date: toISODate(date) });
-    } catch {
-      bookings = [];
-    }
-  }
-
+  // El catálogo (GET /servicios) no dice qué profesional ofrece el servicio, y las reservas solo
+  // se consultan por profesional o por cliente (HU-08/HU-09). Mostrar la disponibilidad real de
+  // este servicio depende de la consulta de disponibilidad de HU-07; por ahora el calendario se
+  // muestra sin reservas marcadas.
   onMount(async () => {
     try {
       service = await serviceService.get(id);
@@ -56,12 +47,6 @@
     } finally {
       loading = false;
     }
-    await loadBookings();
-  });
-
-  $effect(() => {
-    void date;
-    if (service) loadBookings();
   });
 
   function handleSlotClick(slot: TimeSlot) {
@@ -71,8 +56,8 @@
 
   async function confirmBooking() {
     if (!service || !selectedSlot) return;
-    // Backend doesn't expose POST /bookings yet (HU-08 pending). Bail early with a
-    // clear "Próximamente" toast so the user understands why nothing happened.
+    // POST /reservas ya existe (HU-08), pero esta pantalla todavía no sabe qué profesional
+    // atiende este servicio (eso llega con HU-07), así que no hay con qué llamarlo todavía.
     toasts.push('Las reservas estarán disponibles próximamente.', 'info');
     submitting = false;
     selectedSlot = null;
