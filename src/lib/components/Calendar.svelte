@@ -35,7 +35,7 @@
       const end = new Date(start.getTime() + slotMinutes * 60_000);
       const booking = bookings.find((b) => {
         const bs = new Date(b.startTime);
-        return bs.getTime() === start.getTime() && b.status !== 'CANCELLED';
+        return bs.getTime() === start.getTime() && b.status !== 'CANCELADA';
       });
       const state: SlotState = booking ? 'BOOKED' : 'AVAILABLE';
       out.push({ start: start.toISOString(), end: end.toISOString(), state, booking });
@@ -141,14 +141,14 @@
               class:is-booked={slot.state === 'BOOKED'}
               disabled={slot.state === 'BOOKED'}
               aria-pressed={isSelected}
-              aria-label={`${hourLabel} · ${stateLabel(isSelected ? 'SELECTED' : slot.state)}${slot.booking ? ` · ${slot.booking.customerName}` : ''}`}
+              aria-label={`${hourLabel} · ${stateLabel(isSelected ? 'SELECTED' : slot.state)}${slot.booking ? ` · ${slot.booking.customerName ?? 'Cliente'}` : ''}`}
               onclick={() => clickSlot(slot)}
             >
               {#if slot.booking}
                 <span class="day-slot__bar" aria-hidden="true"></span>
                 <span class="day-slot__time">{hourLabel}</span>
-                <span class="day-slot__customer">{slot.booking.customerName}</span>
-                <span class="day-slot__service">{slot.booking.serviceName}</span>
+                <span class="day-slot__customer">{slot.booking.customerName ?? 'Cliente'}</span>
+                <span class="day-slot__service">{slot.booking.serviceName ?? 'Servicio'}</span>
               {:else}
                 <span class="day-slot__time">{hourLabel}</span>
                 <span class="day-slot__hint">Toca para seleccionar</span>

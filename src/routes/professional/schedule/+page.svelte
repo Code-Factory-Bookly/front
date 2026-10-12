@@ -81,7 +81,7 @@
 />
 
 {#if loading}
-  <Skeleton height="220px" />
+  <Skeleton lines={4} />
 {:else}
   <section class="card" data-od-id="professional-schedule">
     {#if slots.length === 0}

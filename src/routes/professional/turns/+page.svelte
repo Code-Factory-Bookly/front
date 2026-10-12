@@ -4,12 +4,13 @@
   import EmptyState from '$lib/components/EmptyState.svelte';
   import { bookingService } from '$lib/services/booking';
   import { toasts } from '$lib/stores/toasts';
+  import { auth } from '$lib/stores/auth';
   import { onMount } from 'svelte';
-  import type { Booking } from '$lib/types/booking';
+  import type { Booking, BookingStatus } from '$lib/types/booking';
 
   let bookings = $state<Booking[]>([]);
   let loading = $state(true);
-  let statusFilter = $state<'ALL' | 'CONFIRMED' | 'PENDING' | 'CANCELLED'>('ALL');
+  let statusFilter = $state<'ALL' | BookingStatus>('ALL');
 
   const filtered = $derived(
     statusFilter === 'ALL' ? bookings : bookings.filter((b) => b.status === statusFilter)
@@ -27,8 +28,13 @@
   });
 
   onMount(async () => {
+    const professionalId = $auth.user?.id;
+    if (!professionalId) {
+      loading = false;
+      return;
+    }
     try {
-      bookings = await bookingService.list({ date: new Date().toISOString().slice(0, 10) });
+      bookings = await bookingService.listByProfessional(professionalId);
     } catch (err) {
       const msg = (err as { message?: string })?.message ?? 'No se pudieron cargar los turnos.';
       toasts.push(msg, 'danger');
@@ -50,7 +56,10 @@
   }
 
   function statusLabel(s: Booking['status']) {
-    return s === 'CONFIRMED' ? 'Confirmado' : s === 'PENDING' ? 'Pendiente' : 'Cancelado';
+    if (s === 'CONFIRMADA') return 'Confirmado';
+    if (s === 'RESCHEDULED') return 'Reprogramado';
+    if (s === 'COMPLETED') return 'Completado';
+    return 'Cancelado';
   }
 </script>
 
@@ -66,7 +75,7 @@
   />
 
   <div class="chips" role="tablist">
-    {#each [['ALL', 'Todos'], ['CONFIRMED', 'Confirmados'], ['PENDING', 'Pendientes'], ['CANCELLED', 'Cancelados']] as [val, lbl] (val)}
+    {#each [['ALL', 'Todos'], ['CONFIRMADA', 'Confirmados'], ['RESCHEDULED', 'Reprogramados'], ['COMPLETED', 'Completados'], ['CANCELADA', 'Cancelados']] as [val, lbl] (val)}
       <button
         type="button"
         class="chip"
@@ -99,8 +108,8 @@
               <li class="row">
                 <span class="row__time">{fmtTime(b.startTime)}</span>
                 <div class="row__main">
-                  <p class="row__customer">{b.customerName}</p>
-                  <p class="row__service">{b.serviceName}</p>
+                  <p class="row__customer">{b.customerName ?? 'Cliente'}</p>
+                  <p class="row__service">{b.serviceName ?? 'Servicio'}</p>
                 </div>
                 <span class="row__status row__status--{b.status.toLowerCase()}">
                   {statusLabel(b.status)}
@@ -226,19 +235,20 @@
     color: $muted;
   }
 
-  .row__status--confirmed {
+  .row__status--confirmada,
+  .row__status--completed {
     color: color.adjust($success, $lightness: -8%);
     background: rgba(94, 159, 122, 0.1);
     border-color: rgba(94, 159, 122, 0.2);
   }
 
-  .row__status--pending {
+  .row__status--rescheduled {
     color: $plum;
     background: $plum-soft;
     border-color: $plum-soft;
   }
 
-  .row__status--cancelled {
+  .row__status--cancelada {
     opacity: 0.7;
   }
 </style>

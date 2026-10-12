@@ -4,6 +4,7 @@
   import Skeleton from '$lib/components/Skeleton.svelte';
   import { bookingService } from '$lib/services/booking';
   import { toasts } from '$lib/stores/toasts';
+  import { auth } from '$lib/stores/auth';
   import { onMount } from 'svelte';
   import type { Booking } from '$lib/types/booking';
   import { ChevronLeft, ChevronRight } from 'lucide-svelte';
@@ -11,10 +12,6 @@
   let date = $state(new Date());
   let bookings = $state<Booking[]>([]);
   let loading = $state(true);
-
-  function toISODate(d: Date) {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
 
   function shiftDays(days: number) {
     const d = new Date(date);
@@ -26,23 +23,22 @@
     return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
   }
 
-  async function load() {
-    loading = true;
+  // Se trae una sola vez: el backend no filtra por fecha, y el Calendar ya arma el día o la
+  // semana que corresponda a partir de la lista completa.
+  onMount(async () => {
+    const professionalId = $auth.user?.id;
+    if (!professionalId) {
+      loading = false;
+      return;
+    }
     try {
-      bookings = await bookingService.list({ date: toISODate(date) });
+      bookings = await bookingService.listByProfessional(professionalId);
     } catch (err) {
       const msg = (err as { message?: string })?.message ?? 'No se pudieron cargar los turnos.';
       toasts.push(msg, 'danger');
     } finally {
       loading = false;
     }
-  }
-
-  onMount(load);
-
-  $effect(() => {
-    void date;
-    if (typeof window !== 'undefined') load();
   });
 
   // Vista auto-switch: week en desktop, day en mobile.

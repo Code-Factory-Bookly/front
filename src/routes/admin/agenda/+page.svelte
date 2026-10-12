@@ -54,12 +54,17 @@
     return `${y}-${m}-${dd}`;
   }
 
+  // Carga por profesional (no hay endpoint que liste reservas de todos a la vez); para "Todos" se
+  // piden en paralelo y se combinan. Depende de la fecha solo para el loading, el filtrado por día
+  // lo hace el propio Calendar con la lista completa.
   $effect(() => {
+    const targets = selectedProfessionalId === 'all' ? professionals.map((p) => p.id) : [selectedProfessionalId];
+    if (targets.length === 0) return;
     void (async () => {
       loading = true;
       try {
-        const target = selectedProfessionalId === 'all' ? null : selectedProfessionalId;
-        bookings = await bookingService.list({ date: toISODate(date), professionalId: target ?? undefined });
+        const lists = await Promise.all(targets.map((id) => bookingService.listByProfessional(id)));
+        bookings = lists.flat();
       } catch (err) {
         const msg = (err as { message?: string })?.message ?? 'No se pudieron cargar los turnos.';
         toasts.push(msg, 'danger');
@@ -94,7 +99,9 @@
     return () => mq.removeEventListener('change', sync);
   });
 
-  const bookedCount = $derived(bookings.filter((b) => b.status !== 'CANCELLED').length);
+  const bookedCount = $derived(
+    bookings.filter((b) => b.status !== 'CANCELADA' && toISODate(new Date(b.startTime)) === toISODate(date)).length
+  );
 </script>
 
 <svelte:head>

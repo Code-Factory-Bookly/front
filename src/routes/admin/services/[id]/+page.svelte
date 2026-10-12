@@ -15,7 +15,7 @@
 
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const categoryOptions = [
+const BASE_CATEGORY_OPTIONS = [
     { value: 'Peluquería', label: 'Peluquería' },
     { value: 'Manos y Pies', label: 'Manos y Pies' },
     { value: 'Estética Facial', label: 'Estética Facial' },
@@ -37,6 +37,14 @@ const categoryOptions = [
   let duration = $state('30');
   let price = $state('1');
   let active = $state(true);
+
+  // Si el servicio ya tenía una categoría fuera de esta lista (dato legado o creado por API),
+  // se agrega como opción extra para no vaciar el selector ni perderla al guardar sin querer.
+  const categoryOptions = $derived(
+    category && !BASE_CATEGORY_OPTIONS.some((o) => o.value === category)
+      ? [...BASE_CATEGORY_OPTIONS, { value: category, label: category }]
+      : BASE_CATEGORY_OPTIONS
+  );
 
   let errors = $state<Record<string, string>>({});
 

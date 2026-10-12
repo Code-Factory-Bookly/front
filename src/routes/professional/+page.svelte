@@ -29,15 +29,20 @@
           d.getFullYear() === today.getFullYear() &&
           d.getMonth() === today.getMonth() &&
           d.getDate() === today.getDate() &&
-          b.status !== 'CANCELLED'
+          b.status !== 'CANCELADA'
         );
       })
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
   );
 
   onMount(async () => {
+    const professionalId = $auth.user?.id;
+    if (!professionalId) {
+      loading = false;
+      return;
+    }
     try {
-      bookings = await bookingService.list({ date: today.toISOString().slice(0, 10) });
+      bookings = await bookingService.listByProfessional(professionalId);
     } catch (err) {
       const msg = (err as { message?: string })?.message ?? 'No se pudieron cargar tus turnos.';
       toasts.push(msg, 'danger');
@@ -107,8 +112,8 @@
           <li class="turn">
             <span class="turn__time">{fmtTime(b.startTime)}</span>
             <div class="turn__main">
-              <p class="turn__customer">{b.customerName}</p>
-              <p class="turn__service">{b.serviceName}</p>
+              <p class="turn__customer">{b.customerName ?? 'Cliente'}</p>
+              <p class="turn__service">{b.serviceName ?? 'Servicio'}</p>
             </div>
             <ChevronRight size={16} class="turn__chev" />
           </li>
