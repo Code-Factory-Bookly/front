@@ -11,6 +11,7 @@ import type {
   User,
   UserRole
 } from '$lib/types/auth';
+import { saveTestAccount } from '$lib/stores/testAccounts';
 
 interface AuthState {
   user: User | null;
@@ -133,6 +134,7 @@ function createAuthStore() {
     tokenStore.set(session.accessToken);
     writeCachedUser(session.user);
     if (session.deviceToken) deviceStore.set(session.user.email, session.deviceToken);
+    saveTestAccount(session.accessToken, session.user);
     store.set({ user: session.user, loading: false, ready: true, error: null });
     return session.user;
   }
@@ -229,6 +231,13 @@ function createAuthStore() {
     store.set({ ...initial, ready: true });
   }
 
+  // Cambia de sesión sin pasar por /auth/login, para el selector de cuentas de prueba.
+  function setSession(token: string, user: User) {
+    tokenStore.set(token);
+    writeCachedUser(user);
+    store.set({ user, loading: false, ready: true, error: null });
+  }
+
   return {
     subscribe: store.subscribe,
     bootstrap,
@@ -242,7 +251,8 @@ function createAuthStore() {
     mfaRegenerateRecoveryCodes,
     mfaDisable,
     changePassword,
-    logout
+    logout,
+    setSession
   };
 }
 
