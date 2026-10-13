@@ -4,17 +4,27 @@
   import Button from '$lib/components/Button.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
+  import Modal from '$lib/components/Modal.svelte';
   import { professionalService } from '$lib/services/professional';
+  import { serviceService } from '$lib/services/service';
   import { toasts } from '$lib/stores/toasts';
   import { onMount } from 'svelte';
   import type { Professional, ProfessionalInput } from '$lib/types/professional';
-  import { Plus, UserRound, X } from 'lucide-svelte';
+  import type { Service } from '$lib/types/service';
+  import { Briefcase, Plus, UserRound, X } from 'lucide-svelte';
 
   let list = $state<Professional[]>([]);
   let loading = $state(true);
   let listUnavailable = $state(false);
   let showForm = $state(false);
   let saving = $state(false);
+
+  let servicesModalOpen = $state(false);
+  let servicesModalProfessional = $state<Professional | null>(null);
+  let allServices = $state<Service[]>([]);
+  let selectedServiceIds = $state<Set<string>>(new Set());
+  let servicesLoading = $state(false);
+  let servicesSaving = $state(false);
 
   let fullName = $state('');
   let email = $state('');
@@ -83,6 +93,51 @@
       toasts.push(msg, 'danger');
     } finally {
       saving = false;
+    }
+  }
+
+  async function openServicesModal(p: Professional) {
+    servicesModalProfessional = p;
+    servicesModalOpen = true;
+    servicesLoading = true;
+    try {
+      const [services, assignedIds] = await Promise.all([
+        allServices.length ? Promise.resolve(allServices) : serviceService.list(),
+        professionalService.services(p.id)
+      ]);
+      allServices = services;
+      selectedServiceIds = new Set(assignedIds);
+    } catch (err) {
+      const msg = (err as { message?: string })?.message ?? 'No se pudieron cargar los servicios.';
+      toasts.push(msg, 'danger');
+      servicesModalOpen = false;
+    } finally {
+      servicesLoading = false;
+    }
+  }
+
+  function toggleService(id: string) {
+    const next = new Set(selectedServiceIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    selectedServiceIds = next;
+  }
+
+  async function saveServices() {
+    if (!servicesModalProfessional) return;
+    servicesSaving = true;
+    try {
+      await professionalService.replaceServices(
+        servicesModalProfessional.id,
+        [...selectedServiceIds]
+      );
+      toasts.push('Servicios actualizados.', 'success');
+      servicesModalOpen = false;
+    } catch (err) {
+      const msg = (err as { message?: string })?.message ?? 'No se pudieron guardar los servicios.';
+      toasts.push(msg, 'danger');
+    } finally {
+      servicesSaving = false;
     }
   }
 </script>
@@ -191,11 +246,47 @@
             <p class="member__email">{p.email}</p>
             <p class="member__bio">{p.specialty}</p>
           </div>
+          <Button variant="ghost" size="sm" onclick={() => openServicesModal(p)}>
+            <Briefcase size={14} /> Servicios
+          </Button>
         </li>
       {/each}
     </ul>
   {/if}
 </section>
+
+<Modal
+  bind:open={servicesModalOpen}
+  title="Servicios de {servicesModalProfessional?.fullName ?? ''}"
+  description="Elige qué servicios atiende este profesional. Los clientes solo podrán reservar con él para estos."
+  size="md"
+>
+  {#if servicesLoading}
+    <Skeleton lines={4} />
+  {:else if allServices.length === 0}
+    <EmptyState title="Sin servicios en el catálogo" description="Crea servicios antes de poder asignarlos." />
+  {:else}
+    <ul class="service-pick">
+      {#each allServices as s (s.id)}
+        <li class="service-pick__item">
+          <label>
+            <input
+              type="checkbox"
+              checked={selectedServiceIds.has(s.id)}
+              onchange={() => toggleService(s.id)}
+            />
+            <span class="service-pick__name">{s.name}</span>
+            <span class="service-pick__category">{s.category}</span>
+          </label>
+        </li>
+      {/each}
+    </ul>
+  {/if}
+  {#snippet footer()}
+    <Button variant="ghost" onclick={() => (servicesModalOpen = false)}>Cancelar</Button>
+    <Button loading={servicesSaving} disabled={servicesLoading} onclick={saveServices}>Guardar</Button>
+  {/snippet}
+</Modal>
 
 <style lang="scss">
   @use '$lib/styles/tokens' as *;
@@ -300,5 +391,41 @@
     line-height: $lh-relaxed;
     margin-top: $space-2;
     max-width: 56ch;
+  }
+
+  .service-pick {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .service-pick__item label {
+    display: flex;
+    align-items: baseline;
+    gap: $space-3;
+    padding: $space-3;
+    border: 1px solid $border;
+    border-radius: $radius-md;
+    cursor: pointer;
+
+    &:hover {
+      background: $ivory;
+    }
+  }
+
+  .service-pick__name {
+    font-weight: $fw-medium;
+    color: $text;
+  }
+
+  .service-pick__category {
+    font-size: $fs-sm;
+    color: $muted;
+    margin-left: auto;
   }
 </style>

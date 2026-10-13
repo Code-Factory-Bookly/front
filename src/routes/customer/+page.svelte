@@ -41,9 +41,9 @@
       loadingServices = false;
     }
 
-    // "Disponibilidad cercana" necesita saber de qué profesional, y esta sección todavía no
-    // elige uno. El backend solo expone reservas por profesional o por cliente (HU-08/HU-09);
-    // mostrar franjas libres reales aquí depende de la consulta de disponibilidad de HU-07.
+    // Esta vista de inicio no tiene todavía un servicio elegido, y la disponibilidad real
+    // (HU-07) depende de un par profesional+servicio concreto. Se deja como calendario de
+    // referencia que, al tocar una franja, lleva a la reserva real en /customer/services/{id}.
     loadingAgenda = false;
   });
 

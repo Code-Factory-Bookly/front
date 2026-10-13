@@ -22,6 +22,13 @@ async function withServiceNames(bookings: Booking[]): Promise<Booking[]> {
   return bookings.map((b) => ({ ...b, serviceName: serviceNameCache.get(b.serviceId) ?? 'Servicio' }));
 }
 
+export interface CreateBookingInput {
+  professionalId: string;
+  serviceId: string;
+  startTime: string; // ISO sin zona, ej. 2026-10-20T10:00:00
+  endTime: string;
+}
+
 export const bookingService = {
   async listByProfessional(professionalId: string): Promise<Booking[]> {
     const bookings = await apiFetch<Booking[]>(`/reservas/profesional/${professionalId}`);
@@ -31,5 +38,12 @@ export const bookingService = {
   async listByCustomer(customerId: string): Promise<Booking[]> {
     const bookings = await apiFetch<Booking[]>(`/reservas/cliente/${customerId}`);
     return withServiceNames(bookings);
+  },
+
+  create(input: CreateBookingInput): Promise<Booking> {
+    return apiFetch<Booking>('/reservas', {
+      method: 'POST',
+      json: input
+    });
   }
 };
