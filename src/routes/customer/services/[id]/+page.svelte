@@ -2,44 +2,105 @@
   import { page } from '$app/stores';
   import PageHead from '$lib/components/PageHead.svelte';
   import Button from '$lib/components/Button.svelte';
-  import Calendar from '$lib/components/Calendar.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Money from '$lib/components/Money.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
+  import Select from '$lib/components/Select.svelte';
   import { serviceService } from '$lib/services/service';
+  import { professionalService } from '$lib/services/professional';
+  import { availabilityService } from '$lib/services/availability';
+  import { bookingService } from '$lib/services/booking';
   import { toasts } from '$lib/stores/toasts';
   import { onMount } from 'svelte';
   import type { Service } from '$lib/types/service';
-  import type { Booking, TimeSlot } from '$lib/types/booking';
-  import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-svelte';
+  import type { ProfessionalSummary } from '$lib/types/professional';
+  import type { AvailabilityDay, AvailabilitySlot } from '$lib/types/availability';
+  import { ArrowLeft, CalendarX, ChevronLeft, ChevronRight } from 'lucide-svelte';
   import { goto } from '$app/navigation';
 
   const id = $derived($page.params.id);
+  const RANGE_DAYS = 14;
 
   let service = $state<Service | null>(null);
-  let bookings = $state<Booking[]>([]);
+  let professionals = $state<ProfessionalSummary[]>([]);
+  let selectedProfessionalId = $state('');
   let loading = $state(true);
+  let availabilityLoading = $state(false);
   let submitting = $state(false);
-  let date = $state(new Date());
-  let selectedSlot = $state<string | null>(null);
+  let date = $state(startOfToday());
+  let availabilityDays = $state<AvailabilityDay[]>([]);
+  let selectedSlot = $state<AvailabilitySlot | null>(null);
   let notFound = $state(false);
+
+  function startOfToday() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  function toIsoDate(d: Date) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function isBeforeToday(d: Date) {
+    return toIsoDate(d) < toIsoDate(startOfToday());
+  }
 
   function shiftDays(days: number) {
     const d = new Date(date);
     d.setDate(d.getDate() + days);
+    if (isBeforeToday(d)) return;
     date = d;
+    selectedSlot = null;
   }
 
   function fmtDate(d: Date) {
     return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
   }
 
-  // El catálogo (GET /servicios) no dice qué profesional ofrece el servicio, y las reservas solo
-  // se consultan por profesional o por cliente (HU-08/HU-09). Mostrar la disponibilidad real de
-  // este servicio depende de la consulta de disponibilidad de HU-07; por ahora el calendario se
-  // muestra sin reservas marcadas.
+  function fmtHour(iso: string) {
+    return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  const slotsForDay = $derived.by(() => {
+    const iso = toIsoDate(date);
+    return availabilityDays.find((d) => d.date === iso)?.slots ?? [];
+  });
+
+  async function loadAvailability() {
+    if (!service || !selectedProfessionalId) return;
+    availabilityLoading = true;
+    selectedSlot = null;
+    try {
+      const from = startOfToday();
+      const to = new Date(from);
+      to.setDate(to.getDate() + RANGE_DAYS);
+      const response = await availabilityService.find({
+        professionalId: selectedProfessionalId,
+        serviceId: id,
+        from: toIsoDate(from),
+        to: toIsoDate(to)
+      });
+      availabilityDays = response.days;
+    } catch (err) {
+      const msg = (err as { message?: string })?.message ?? 'No se pudo cargar la disponibilidad.';
+      toasts.push(msg, 'danger');
+      availabilityDays = [];
+    } finally {
+      availabilityLoading = false;
+    }
+  }
+
   onMount(async () => {
     try {
       service = await serviceService.get(id);
+      professionals = await professionalService.forService(id);
+      if (professionals.length > 0) {
+        selectedProfessionalId = professionals[0].id;
+      }
     } catch (err) {
       const e = err as { status?: number; message?: string };
       if (e.status === 404) notFound = true;
@@ -49,18 +110,35 @@
     }
   });
 
-  function handleSlotClick(slot: TimeSlot) {
-    if (slot.state === 'BOOKED') return;
-    selectedSlot = slot.start;
+  // El Select no reenvía eventos nativos; reaccionar al cambio de id es más simple que cablear
+  // un onchange a través de un componente que no lo expone.
+  $effect(() => {
+    if (selectedProfessionalId) loadAvailability();
+  });
+
+  function handleSlotClick(slot: AvailabilitySlot) {
+    selectedSlot = selectedSlot?.startTime === slot.startTime ? null : slot;
   }
 
   async function confirmBooking() {
-    if (!service || !selectedSlot) return;
-    // POST /reservas ya existe (HU-08), pero esta pantalla todavía no sabe qué profesional
-    // atiende este servicio (eso llega con HU-07), así que no hay con qué llamarlo todavía.
-    toasts.push('Las reservas estarán disponibles próximamente.', 'info');
-    submitting = false;
-    selectedSlot = null;
+    if (!service || !selectedSlot || !selectedProfessionalId) return;
+    submitting = true;
+    try {
+      await bookingService.create({
+        professionalId: selectedProfessionalId,
+        serviceId: id,
+        startTime: selectedSlot.startTime,
+        endTime: selectedSlot.endTime
+      });
+      toasts.push('Reserva confirmada.', 'success');
+      goto('/customer/agenda');
+    } catch (err) {
+      const msg = (err as { message?: string })?.message ?? 'No se pudo confirmar la reserva.';
+      toasts.push(msg, 'danger');
+      await loadAvailability();
+    } finally {
+      submitting = false;
+    }
   }
 </script>
 
@@ -90,40 +168,82 @@
       </div>
     </header>
 
-    <section class="picker" data-od-id="customer-booking-picker">
-      <div class="picker__head">
-        <p class="eyebrow">Disponibilidad</p>
-        <div class="picker__date">
-          <button type="button" class="picker__nav" aria-label="Día anterior" onclick={() => shiftDays(-1)}>
-            <ChevronLeft size={18} />
-          </button>
-          <span class="picker__date-label">{fmtDate(date)}</span>
-          <button type="button" class="picker__nav" aria-label="Día siguiente" onclick={() => shiftDays(1)}>
-            <ChevronRight size={18} />
-          </button>
-        </div>
-      </div>
-      <Calendar
-        {date}
-        {bookings}
-        view="day"
-        {selectedSlot}
-        onSlotClick={handleSlotClick}
-      />
-    </section>
-
-    <div class="cta">
-      <Button
-        size="lg"
-        disabled={!selectedSlot}
-        loading={submitting}
-        onclick={confirmBooking}
+    {#if professionals.length === 0}
+      <EmptyState
+        title="Sin profesionales disponibles"
+        description="Todavía no hay nadie en el equipo que ofrezca este servicio. Vuelve a intentarlo más tarde."
       >
-        {selectedSlot
-          ? `Confirmar ${new Date(selectedSlot).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
-          : 'Elige un horario'}
-      </Button>
-    </div>
+        {#snippet icon()}
+          <CalendarX size={24} />
+        {/snippet}
+      </EmptyState>
+    {:else}
+      <section class="picker" data-od-id="customer-booking-picker">
+        <div class="picker__professional">
+          <Select
+            label="Profesional"
+            bind:value={selectedProfessionalId}
+            options={professionals.map((p) => ({ value: p.id, label: `${p.fullName} · ${p.specialty}` }))}
+          />
+        </div>
+
+        <div class="picker__head">
+          <p class="eyebrow">Disponibilidad</p>
+          <div class="picker__date">
+            <button
+              type="button"
+              class="picker__nav"
+              aria-label="Día anterior"
+              disabled={isBeforeToday(new Date(date.getTime() - 86400000))}
+              onclick={() => shiftDays(-1)}
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <span class="picker__date-label">{fmtDate(date)}</span>
+            <button type="button" class="picker__nav" aria-label="Día siguiente" onclick={() => shiftDays(1)}>
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+
+        {#if availabilityLoading}
+          <Skeleton lines={3} />
+        {:else if slotsForDay.length === 0}
+          <EmptyState
+            title="Sin horarios libres este día"
+            description="Elige otro día o prueba con otro profesional."
+          />
+        {:else}
+          <ul class="slots">
+            {#each slotsForDay as slot (slot.startTime)}
+              {@const isSelected = selectedSlot?.startTime === slot.startTime}
+              <li>
+                <button
+                  type="button"
+                  class="slot"
+                  class:is-selected={isSelected}
+                  aria-pressed={isSelected}
+                  onclick={() => handleSlotClick(slot)}
+                >
+                  {fmtHour(slot.startTime)}
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </section>
+
+      <div class="cta">
+        <Button
+          size="lg"
+          disabled={!selectedSlot}
+          loading={submitting}
+          onclick={confirmBooking}
+        >
+          {selectedSlot ? `Confirmar ${fmtHour(selectedSlot.startTime)}` : 'Elige un horario'}
+        </Button>
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -191,6 +311,11 @@
     margin-bottom: $space-8;
   }
 
+  .picker__professional {
+    max-width: 360px;
+    margin-bottom: $space-6;
+  }
+
   .picker__head {
     display: flex;
     flex-direction: column;
@@ -227,9 +352,14 @@
     justify-content: center;
     cursor: pointer;
 
-    &:hover {
+    &:hover:not(:disabled) {
       background: $ivory;
       color: $plum;
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
     }
   }
 
@@ -238,6 +368,41 @@
     text-transform: capitalize;
     font-weight: $fw-medium;
     font-size: $fs-sm;
+  }
+
+  .slots {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-3;
+    padding: 0;
+    margin: 0;
+  }
+
+  .slot {
+    appearance: none;
+    border: 1px solid $border;
+    background: $surface;
+    border-radius: $radius-pill;
+    padding: $space-3 $space-5;
+    font-size: $fs-sm;
+    font-weight: $fw-medium;
+    color: $text;
+    cursor: pointer;
+    transition:
+      background var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
+
+    &:hover {
+      background: color.adjust($plum-soft, $lightness: 4%);
+      border-color: $plum;
+    }
+
+    &.is-selected {
+      background: $plum;
+      border-color: $plum;
+      color: white;
+    }
   }
 
   .cta {

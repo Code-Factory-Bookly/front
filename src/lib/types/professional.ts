@@ -13,3 +13,9 @@ export interface ProfessionalInput {
   fullName: string;
   specialty: string;
 }
+
+export interface ProfessionalSummary {
+  id: string;
+  fullName: string;
+  specialty: string;
+}
