@@ -169,7 +169,11 @@
     <div class="week-header">
       <div class="week-header__time-spacer" aria-hidden="true"></div>
       {#each weekDays as wd (wd.toISOString())}
-        <div class="week-header__day" class:is-today={isSameDay(wd, today)}>
+        <div
+          class="week-header__day"
+          class:is-today={isSameDay(wd, today)}
+          class:is-selected-day={isSameDay(wd, date)}
+        >
           <span class="week-header__dow">{fmtDow(wd)}</span>
           <span class="week-header__num">{fmtDay(wd)}</span>
         </div>
@@ -189,7 +193,8 @@
       {#each weekDays as wd, dayIdx (wd.toISOString())}
         {@const slots = buildDaySlots(wd)}
         {@const isToday = isSameDay(wd, today)}
-        <div class="week-col" class:is-today={isToday}>
+        {@const isSelectedDay = isSameDay(wd, date)}
+        <div class="week-col" class:is-today={isToday} class:is-selected-day={isSelectedDay}>
           {#each slots as slot (slot.start)}
             {@const isSelected = selectedSlot === slot.start}
             <button
@@ -410,6 +415,10 @@
     &.is-today {
       color: $plum;
     }
+
+    &.is-selected-day {
+      background: $plum-soft;
+    }
   }
 
   .week-header__dow {
@@ -436,6 +445,10 @@
 
     &.is-today {
       background: rgba(63, 81, 181, 0.03);
+    }
+
+    &.is-selected-day {
+      box-shadow: inset 2px 0 0 $plum, inset -2px 0 0 $plum;
     }
   }
 
