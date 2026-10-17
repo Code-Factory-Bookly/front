@@ -11,11 +11,9 @@
   import { ArrowLeft } from 'lucide-svelte';
 
   const categoryOptions = [
-    { value: 'Peluquería', label: 'Peluquería' },
-    { value: 'Manos y Pies', label: 'Manos y Pies' },
-    { value: 'Estética Facial', label: 'Estética Facial' },
-    { value: 'Depilación', label: 'Depilación' },
-    { value: 'Maquillaje', label: 'Maquillaje' },
+    { value: 'Barbería', label: 'Barbería' },
+    { value: 'Manicure y Pedicura', label: 'Manicure y Pedicura' },
+    { value: 'Spa y Masajes', label: 'Spa y Masajes' },
     { value: 'Otro', label: 'Otro' }
   ];
 

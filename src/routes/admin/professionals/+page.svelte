@@ -181,7 +181,7 @@
           label="Especialidad"
           bind:value={specialty}
           error={errors.specialty ?? null}
-          placeholder="Limpieza dental"
+          placeholder="Barbería"
           required
         />
       </div>

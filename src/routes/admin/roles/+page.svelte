@@ -164,7 +164,7 @@
       {#if role === 'PROFESSIONAL' && !selected.hasProfessionalProfile}
         <Field
           label="Especialidad"
-          placeholder="Ortodoncia"
+          placeholder="Barbería"
           bind:value={specialty}
           error={errors.specialty ?? null}
           required
