@@ -32,21 +32,21 @@
   let specialty = $state('');
   let errors = $state<Record<string, string>>({});
 
-  onMount(async () => {
+  async function loadList() {
+    loading = true;
+    listUnavailable = false;
     try {
       list = await professionalService.list();
     } catch (err) {
-      const e = err as { status?: number };
-      if (e.status === 404 || e.status === 401 || e.status === 405) {
-        listUnavailable = true;
-      } else {
-        const msg = (err as { message?: string })?.message ?? 'No se pudo cargar el equipo.';
-        toasts.push(msg, 'danger');
-      }
+      listUnavailable = true;
+      const msg = (err as { message?: string })?.message ?? 'No se pudo cargar el equipo.';
+      toasts.push(msg, 'danger');
     } finally {
       loading = false;
     }
-  });
+  }
+
+  onMount(loadList);
 
   function reset() {
     fullName = '';
@@ -220,9 +220,13 @@
     </div>
   {:else if listUnavailable}
     <EmptyState
-      title="Listado no expuesto en Sprint 1"
-      description="El backend todavía no devuelve el equipo; puedes seguir dando altas desde el formulario de arriba."
-    />
+      title="No se pudo cargar el equipo"
+      description="Puede ser un problema de conexión pasajero. Intenta de nuevo, o sigue dando altas desde el formulario de arriba."
+    >
+      {#snippet action()}
+        <Button variant="ghost" onclick={loadList}>Reintentar</Button>
+      {/snippet}
+    </EmptyState>
   {:else if list.length === 0}
     <EmptyState
       title="Aún no hay profesionales"
