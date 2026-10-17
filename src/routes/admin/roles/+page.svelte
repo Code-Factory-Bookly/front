@@ -39,12 +39,18 @@
   );
   const isNoOp = $derived(selected !== null && role === selected.role);
 
-  // Sin texto se muestran algunas sugerencias (no toda la tabla); a medida que se escribe, la
-  // misma busqueda filtra en vivo con un pequeño debounce para no disparar una petición por tecla.
+  // El backend ya no acepta busquedas de menos de 2 caracteres (exponian usuarios sin un criterio
+  // concreto); por eso ni se llama la API en ese caso. Con 2+ caracteres, la misma busqueda filtra
+  // en vivo con un pequeño debounce para no disparar una petición por tecla.
   $effect(() => {
     const trimmed = query.trim();
     result = null;
     if (searchTimer) clearTimeout(searchTimer);
+    if (trimmed.length < 2) {
+      results = [];
+      searching = false;
+      return;
+    }
     searching = true;
     searchTimer = setTimeout(async () => {
       try {
@@ -122,10 +128,10 @@
 
     {#if searching}
       <p class="hint">Buscando…</p>
+    {:else if query.trim().length > 0 && query.trim().length < 2}
+      <p class="hint">Escribe al menos 2 caracteres para buscar.</p>
     {:else if query.trim().length >= 2 && results.length === 0}
       <p class="hint">No encontramos usuarios con ese correo o nombre.</p>
-    {:else if query.trim().length === 0 && results.length}
-      <p class="hint">Algunos usuarios existentes. Escribe para filtrar.</p>
     {/if}
 
     {#if results.length}
