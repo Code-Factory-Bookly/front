@@ -2,24 +2,21 @@
   import PageHead from '$lib/components/PageHead.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
-  import Calendar from '$lib/components/Calendar.svelte';
-  import StatusPill from '$lib/components/StatusPill.svelte';
   import Money from '$lib/components/Money.svelte';
   import { serviceService } from '$lib/services/service';
+  import { bookingService } from '$lib/services/booking';
   import { toasts } from '$lib/stores/toasts';
   import { auth } from '$lib/stores/auth';
   import { onMount } from 'svelte';
   import type { Service } from '$lib/types/service';
-  import type { Booking, TimeSlot } from '$lib/types/booking';
-  import { Search, ArrowRight, Sparkles } from 'lucide-svelte';
+  import type { Booking } from '$lib/types/booking';
+  import { Search, ArrowRight, Sparkles, Calendar as CalIcon } from 'lucide-svelte';
   import { goto } from '$app/navigation';
 
   let services = $state<Service[]>([]);
   let bookings = $state<Booking[]>([]);
   let loadingServices = $state(true);
   let loadingAgenda = $state(true);
-  let selectedSlot = $state<string | null>(null);
-  let selectedServiceId = $state<string | null>(null);
 
   const greeting = $derived.by(() => {
     const h = new Date().getHours();
@@ -29,7 +26,21 @@
   });
 
   const featured = $derived(services.filter((s) => s.status === 'ACTIVO').slice(0, 4));
-  const today = new Date();
+
+  const upcoming = $derived(
+    bookings
+      .filter((b) => new Date(b.startTime) >= new Date() && b.status !== 'CANCELADA')
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+      .slice(0, 3)
+  );
+
+  function fmtTime(iso: string) {
+    return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
 
   onMount(async () => {
     try {
@@ -41,23 +52,16 @@
       loadingServices = false;
     }
 
-    // Esta vista de inicio no tiene todavía un servicio elegido, y la disponibilidad real
-    // (HU-07) depende de un par profesional+servicio concreto. Se deja como calendario de
-    // referencia que, al tocar una franja, lleva a la reserva real en /customer/services/{id}.
+    const customerId = $auth.user?.id;
+    if (customerId) {
+      try {
+        bookings = await bookingService.listByCustomer(customerId);
+      } catch {
+        bookings = [];
+      }
+    }
     loadingAgenda = false;
   });
-
-  function handleSlotClick(slot: TimeSlot) {
-    if (slot.state === 'BOOKED') return;
-    selectedSlot = slot.start;
-    if (selectedServiceId) {
-      goto(`/customer/services/${selectedServiceId}`);
-    } else if (featured[0]) {
-      goto(`/customer/services/${featured[0].id}`);
-    } else {
-      goto('/customer/services');
-    }
-  }
 </script>
 
 <svelte:head>
@@ -122,22 +126,49 @@
 
   <section class="availability" data-od-id="customer-availability">
     <header class="availability__head">
-      <h2 class="availability__title">Disponibilidad cercana</h2>
-      <p class="availability__date">
-        {today.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
-      </p>
+      <h2 class="availability__title">Tus próximas reservas</h2>
+      {#if upcoming.length}
+        <a class="featured__link" href="/customer/agenda">
+          Ver mi agenda
+          <ArrowRight size={14} />
+        </a>
+      {/if}
     </header>
 
     {#if loadingAgenda}
-      <Skeleton lines={6} />
+      <div class="bookings">
+        {#each Array(2) as _, i (i)}
+          <Skeleton lines={2} avatar />
+        {/each}
+      </div>
+    {:else if upcoming.length === 0}
+      <EmptyState
+        title="Sin reservas próximas."
+        description="Cuando reserves un servicio aparecerá en este lugar."
+      >
+        {#snippet action()}
+          <a class="home-search" href="/customer/services">
+            <CalIcon size={16} /> Explorar servicios
+          </a>
+        {/snippet}
+      </EmptyState>
     {:else}
-      <Calendar
-        date={today}
-        bookings={bookings}
-        view="day"
-        {selectedSlot}
-        onSlotClick={handleSlotClick}
-      />
+      <div class="bookings">
+        {#each upcoming as b (b.id)}
+          <article class="booking">
+            <div class="booking__date">
+              <span class="booking__day">{new Date(b.startTime).getDate()}</span>
+              <span class="booking__month">
+                {new Date(b.startTime).toLocaleDateString('es-ES', { month: 'short' })}
+              </span>
+            </div>
+            <div class="booking__main">
+              <p class="booking__service">{b.serviceName ?? 'Servicio'}</p>
+              <p class="booking__meta">{fmtTime(b.startTime)} · {fmtDate(b.startTime)}</p>
+            </div>
+          </article>
+        {/each}
+      </div>
     {/if}
   </section>
 </div>
@@ -303,8 +334,8 @@
 
   .availability__head {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    align-items: baseline;
+    justify-content: space-between;
     margin-bottom: $space-4;
   }
 
@@ -315,9 +346,60 @@
     letter-spacing: $ls-tight;
   }
 
-  .availability__date {
+  .bookings {
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+  }
+
+  .booking {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: $space-4;
+    align-items: center;
+    padding: $space-4 $space-5;
+    background: $surface;
+    border: 1px solid $border;
+    border-radius: $radius-md;
+  }
+
+  .booking__date {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 56px;
+    padding: $space-2;
+    background: $plum-soft;
+    border-radius: $radius-sm;
+    color: $plum;
+  }
+
+  .booking__day {
+    font-family: $font-display;
+    font-size: $fs-xl;
+    font-weight: $fw-semibold;
+    line-height: 1;
+  }
+
+  .booking__month {
+    font-size: $fs-xs;
+    text-transform: uppercase;
+    letter-spacing: $ls-wide;
+    margin-top: 4px;
+  }
+
+  .booking__main {
+    min-width: 0;
+  }
+
+  .booking__service {
+    font-weight: $fw-semibold;
+    color: $text;
+  }
+
+  .booking__meta {
     font-size: $fs-sm;
     color: $muted;
-    text-transform: capitalize;
+    margin-top: 2px;
   }
 </style>

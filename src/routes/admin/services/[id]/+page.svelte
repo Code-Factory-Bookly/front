@@ -16,11 +16,9 @@
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const BASE_CATEGORY_OPTIONS = [
-    { value: 'Peluquería', label: 'Peluquería' },
-    { value: 'Manos y Pies', label: 'Manos y Pies' },
-    { value: 'Estética Facial', label: 'Estética Facial' },
-    { value: 'Depilación', label: 'Depilación' },
-    { value: 'Maquillaje', label: 'Maquillaje' },
+    { value: 'Barbería', label: 'Barbería' },
+    { value: 'Manicure y Pedicura', label: 'Manicure y Pedicura' },
+    { value: 'Spa y Masajes', label: 'Spa y Masajes' },
     { value: 'Otro', label: 'Otro' }
   ];
 
