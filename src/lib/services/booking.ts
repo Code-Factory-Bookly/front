@@ -1,6 +1,6 @@
 import { apiFetch } from './api';
 import { serviceService } from './service';
-import type { Booking } from '$lib/types/booking';
+import type { Booking, BookingNotifications, CancelBookingResult } from '$lib/types/booking';
 
 // El catálogo es público y pequeño; cachear por id evita pedirlo de nuevo en cada recarga.
 const serviceNameCache = new Map<string, string>();
@@ -45,5 +45,18 @@ export const bookingService = {
       method: 'POST',
       json: input
     });
+  },
+
+  // HU-09: el backend rechaza cancelaciones con menos de la antelación mínima configurada.
+  cancel(bookingId: string, reason?: string): Promise<CancelBookingResult> {
+    return apiFetch<CancelBookingResult>(`/reservas/${bookingId}/cancelacion`, {
+      method: 'PATCH',
+      json: reason ? { reason } : {}
+    });
+  },
+
+  // HU-10: registro de correos de la reserva (confirmación, cancelación).
+  notifications(bookingId: string): Promise<BookingNotifications> {
+    return apiFetch<BookingNotifications>(`/reservas/${bookingId}/notificaciones`);
   }
 };
