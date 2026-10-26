@@ -1,6 +1,7 @@
 <script lang="ts">
   import { auth } from '$lib/stores/auth';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import ProfessionalNav from '$lib/components/ProfessionalNav.svelte';
   import { onMount } from 'svelte';
 
@@ -33,7 +34,7 @@
 {#if ready}
   <div class="pro-shell">
     <ProfessionalNav />
-    <div class="pro-shell__main">
+    <div class="pro-shell__main" class:pro-shell__main--wide={$page.url.pathname.startsWith('/professional/agenda')}>
       {@render children?.()}
     </div>
   </div>
@@ -72,6 +73,21 @@
 
     @media (min-width: #{$bp-xl}) {
       padding: $space-10 $space-9 $space-12;
+    }
+  }
+
+  // La agenda aprovecha todo el ancho disponible: es una cuadrícula, no un texto.
+  .pro-shell__main--wide {
+    max-width: none;
+
+    @media (min-width: #{$bp-md}) {
+      padding-top: $space-6;
+      padding-bottom: $space-5;
+    }
+
+    @media (min-width: #{$bp-xl}) {
+      padding-top: $space-6;
+      padding-bottom: $space-5;
     }
   }
 

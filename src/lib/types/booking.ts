@@ -54,4 +54,6 @@ export interface TimeSlot {
   booking?: Booking;
   /** La reserva empieza en esta franja (las siguientes que cubre son solo continuación). */
   bookingStart?: boolean;
+  /** Cuántas franjas cubre la reserva desde esta (solo en la franja de inicio). */
+  bookingSpan?: number;
 }
