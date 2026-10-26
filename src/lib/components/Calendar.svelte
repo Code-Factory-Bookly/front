@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Booking, SlotState, TimeSlot } from '$lib/types/booking';
-  import type { DayOfWeek, ScheduleSlot } from '$lib/types/schedule';
+  import type { ScheduleSlot } from '$lib/types/schedule';
+  import { isWithinSchedule } from '$lib/utils/schedule';
 
   interface Props {
     date: Date;
@@ -17,6 +18,8 @@
     /** En semana, ajusta el alto a la pantalla para ver todo sin hacer scroll. */
     fit?: boolean;
     onSlotClick?: (slot: TimeSlot) => void;
+    /** Si se da, las reservas son clicables (detalle) en vez de estar deshabilitadas. */
+    onBookingClick?: (booking: Booking) => void;
   }
 
   let {
@@ -30,30 +33,25 @@
     schedule,
     readonly = false,
     fit = false,
-    onSlotClick
+    onSlotClick,
+    onBookingClick
   }: Props = $props();
 
   const slotsPerHour = $derived(60 / slotMinutes);
 
-  const DAYS: DayOfWeek[] = [
-    'SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'
-  ];
-
-  function toMinutes(time: string) {
-    const [h, m] = time.split(':');
-    return Number(h) * 60 + Number(m);
+  function inSchedule(start: Date) {
+    return !schedule || isWithinSchedule(schedule, start, slotMinutes);
   }
 
-  function inSchedule(start: Date) {
-    if (!schedule) return true;
-    const day = DAYS[start.getDay()];
-    const minutes = start.getHours() * 60 + start.getMinutes();
-    return schedule.some(
-      (s) =>
-        s.dayOfWeek === day &&
-        minutes >= toMinutes(s.startTime) &&
-        minutes + slotMinutes <= toMinutes(s.endTime)
-    );
+  // Reloj para la línea de "ahora"; se refresca cada minuto.
+  let now = $state(new Date());
+  $effect(() => {
+    const id = setInterval(() => (now = new Date()), 60_000);
+    return () => clearInterval(id);
+  });
+
+  function minutesBetween(a: string, b: string) {
+    return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60_000);
   }
 
   function buildDaySlots(day: Date): TimeSlot[] {
@@ -75,7 +73,18 @@
         : inSchedule(start)
           ? 'AVAILABLE'
           : 'OUT_OF_HOURS';
-      out.push({ start: start.toISOString(), end: end.toISOString(), state, booking, bookingStart });
+      const bookingSpan =
+        booking && bookingStart
+          ? Math.max(1, Math.ceil((new Date(booking.endTime).getTime() - start.getTime()) / (slotMinutes * 60_000)))
+          : undefined;
+      out.push({
+        start: start.toISOString(),
+        end: end.toISOString(),
+        state,
+        booking,
+        bookingStart,
+        bookingSpan
+      });
     }
     return out;
   }
@@ -91,6 +100,16 @@
   const daySlots = $derived(buildDaySlots(date));
   const today = new Date();
 
+  function nowTop(day: Date) {
+    if (!isSameDay(day, now)) return null;
+    const startOfDay = new Date(day);
+    startOfDay.setHours(workdayStart, 0, 0, 0);
+    const seconds = (now.getTime() - startOfDay.getTime()) / 1000;
+    const total = (workdayEnd - workdayStart) * 3600;
+    if (seconds < 0 || seconds > total) return null;
+    return `${(seconds / total) * 100}%`;
+  }
+
   const weekDays = $derived.by(() => {
     const d = new Date(date);
     const day = d.getDay();
@@ -104,16 +123,7 @@
     });
   });
 
-  const nowLineTop = $derived.by(() => {
-    if (!isSameDay(date, today)) return null;
-    const startOfDay = new Date(date);
-    startOfDay.setHours(workdayStart, 0, 0, 0);
-    const totalSeconds = (today.getTime() - startOfDay.getTime()) / 1000;
-    const workSeconds = (workdayEnd - workdayStart) * 3600;
-    if (totalSeconds < 0 || totalSeconds > workSeconds) return null;
-    const pct = (totalSeconds / workSeconds) * 100;
-    return `${pct}%`;
-  });
+  const nowLineTop = $derived(nowTop(date));
 
   function fmtHour(d: string | Date) {
     return new Date(d).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -138,7 +148,10 @@
   }
 
   function clickSlot(slot: TimeSlot) {
-    if (slot.state === 'BOOKED') return;
+    if (slot.state === 'BOOKED') {
+      if (slot.booking) onBookingClick?.(slot.booking);
+      return;
+    }
     onSlotClick?.(slot);
   }
 </script>
@@ -178,7 +191,7 @@
               class:is-booked={slot.state === 'BOOKED'}
               class:is-out={slot.state === 'OUT_OF_HOURS'}
               class:is-readonly={readonly}
-              disabled={slot.state === 'BOOKED'}
+              disabled={slot.state === 'BOOKED' && !onBookingClick}
               aria-pressed={isSelected}
               aria-label={`${hourLabel} · ${stateLabel(isSelected ? 'SELECTED' : slot.state)}${slot.booking ? ` · ${slot.booking.customerName ?? 'Cliente'}` : ''}`}
               onclick={() => clickSlot(slot)}
@@ -187,7 +200,9 @@
                 <span class="day-slot__bar" aria-hidden="true"></span>
                 <span class="day-slot__time">{hourLabel}</span>
                 <span class="day-slot__customer">{slot.booking.customerName ?? 'Cliente'}</span>
-                <span class="day-slot__service">{slot.booking.serviceName ?? 'Servicio'}</span>
+                <span class="day-slot__service">
+                  {slot.booking.serviceName ?? 'Servicio'} · {minutesBetween(slot.booking.startTime, slot.booking.endTime)} min
+                </span>
               {:else if slot.booking}
                 <span class="day-slot__time">{hourLabel}</span>
               {:else if slot.state === 'OUT_OF_HOURS'}
@@ -238,6 +253,7 @@
         {@const slots = buildDaySlots(wd)}
         {@const isToday = isSameDay(wd, today)}
         {@const isSelectedDay = isSameDay(wd, date)}
+        {@const nowOffset = nowTop(wd)}
         <div class="week-col" class:is-today={isToday} class:is-selected-day={isSelectedDay}>
           {#each slots as slot (slot.start)}
             {@const isSelected = selectedSlot === slot.start}
@@ -250,17 +266,31 @@
                 ? `${fmtHour(slot.booking.startTime)}–${fmtHour(slot.booking.endTime)} · ${slot.booking.customerName ?? 'Cliente'} · ${slot.booking.serviceName ?? 'Servicio'}`
                 : undefined}
               aria-label={`${wd.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric' })} ${fmtHour(slot.start)} ${stateLabel(isSelected ? 'SELECTED' : slot.state)}${slot.booking ? ` · ${slot.booking.customerName ?? 'Cliente'}` : ''}`}
-              disabled={slot.state === 'BOOKED'}
+              disabled={slot.state === 'BOOKED' && !onBookingClick}
               onclick={() => clickSlot(slot)}
             >
               {#if slot.booking && slot.bookingStart}
-                <span class="week-cell__label">
+                <span
+                  class="week-cell__label"
+                  class:is-tall={(slot.bookingSpan ?? 1) > 1}
+                  style:height="calc(100% * {slot.bookingSpan ?? 1} - 2px)"
+                >
+                  <span class="week-cell__time">{fmtHour(slot.booking.startTime)}</span>
                   <strong>{slot.booking.customerName ?? 'Cliente'}</strong>
-                  <span>{slot.booking.serviceName ?? 'Servicio'}</span>
+                  <span class="week-cell__service">
+                    {slot.booking.serviceName ?? 'Servicio'} · {minutesBetween(slot.booking.startTime, slot.booking.endTime)} min
+                  </span>
                 </span>
+              {:else if slot.state === 'AVAILABLE'}
+                <span class="week-cell__free">Horario disponible</span>
               {/if}
             </button>
           {/each}
+          {#if nowOffset}
+            <div class="now-line" style="top: {nowOffset}" aria-hidden="true">
+              <span class="now-line__dot"></span>
+            </div>
+          {/if}
         </div>
       {/each}
     </div>
@@ -504,6 +534,7 @@
   }
 
   .week-col {
+    position: relative;
     display: flex;
     flex-direction: column;
     border-left: 1px solid $border;
@@ -542,6 +573,8 @@
   }
 
   .week-cell {
+    display: flex;
+    align-items: center;
     flex: 1;
     min-height: 28px;
     appearance: none;
@@ -558,12 +591,12 @@
 
     &.week-cell--booked {
       cursor: default;
-      background: rgba(63, 81, 181, 0.16);
+      background: $plum-soft;
       color: $text;
       opacity: 1;
 
       &:hover {
-        background: rgba(63, 81, 181, 0.16);
+        background: $plum-soft;
       }
 
       // Las franjas de continuación se funden con la de inicio: se ve una sola reserva.
@@ -573,6 +606,31 @@
 
       &.is-start {
         box-shadow: inset 3px 0 0 $plum;
+      }
+    }
+
+    // Hora libre: una "píldora" con borde suave; el texto aparece al pasar el mouse
+    // (o siempre, en pantallas altas donde cada fila es lo bastante grande).
+    &.week-cell--available {
+      border-top-color: transparent;
+
+      &::before {
+        content: '';
+        position: absolute;
+        inset: 1px 4px;
+        border: 1px solid rgba(0, 0, 0, 0.07);
+        border-radius: 6px;
+        background: $surface;
+        pointer-events: none;
+      }
+
+      &:hover::before {
+        border-color: $plum;
+        background: color.adjust($plum-soft, $lightness: 4%);
+      }
+
+      &:hover .week-cell__free {
+        display: inline;
       }
     }
 
@@ -595,9 +653,25 @@
     }
   }
 
+  .week-cell__free {
+    display: none;
+    position: relative;
+    z-index: 1;
+    padding-left: 12px;
+    font-size: $fs-xs;
+    color: $muted;
+    white-space: nowrap;
+
+    @media (min-height: 1000px) {
+      display: inline;
+    }
+  }
+
   .week-cell__label {
     position: absolute;
-    inset: 1px 4px 0 8px;
+    top: 1px;
+    left: 8px;
+    right: 4px;
     display: flex;
     align-items: baseline;
     gap: 6px;
@@ -605,7 +679,7 @@
     white-space: nowrap;
     text-align: left;
     font-size: $fs-xs;
-    line-height: 1.2;
+    line-height: 1.25;
     z-index: 1;
 
     strong {
@@ -614,10 +688,28 @@
       text-overflow: ellipsis;
     }
 
-    span {
+    // Reserva de una sola franja: todo en una línea (hora, cliente, servicio).
+    .week-cell__time,
+    .week-cell__service {
       color: $muted;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .week-cell__service {
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    // Reserva más larga: hora y cliente en la primera línea, servicio y duración debajo.
+    &.is-tall {
+      flex-wrap: wrap;
+      align-content: flex-start;
+      row-gap: 0;
+      padding-top: 3px;
+
+      .week-cell__service {
+        flex-basis: 100%;
+      }
     }
   }
 
