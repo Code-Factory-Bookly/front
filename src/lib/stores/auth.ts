@@ -168,8 +168,14 @@ function createAuthStore() {
       method: 'POST',
       json: { mfaToken, code, trustDevice }
     });
-    const user = startSession(data.session);
-    return { user, recoveryCodes: data.recoveryCodes };
+    // La sesión NO se inicia aquí: apenas hay usuario, el layout de /login redirige al panel y
+    // los códigos de recuperación (que no vuelven a mostrarse) desaparecerían de la pantalla.
+    // Quien llama debe invocar completeEnrollment cuando la persona confirme que los guardó.
+    return { session: data.session, recoveryCodes: data.recoveryCodes };
+  }
+
+  function completeEnrollment(session: MfaConfirmation['session']) {
+    return startSession(session);
   }
 
   async function mfaVerify(mfaToken: string, code: string, trustDevice: boolean) {
@@ -245,6 +251,7 @@ function createAuthStore() {
     register,
     mfaEnroll,
     mfaConfirmEnrollment,
+    completeEnrollment,
     mfaVerify,
     mfaSkip,
     mfaRecoveryStatus,
