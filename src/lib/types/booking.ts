@@ -17,6 +17,34 @@ export interface Booking {
   customerName?: string;
 }
 
+export interface CancelBookingResult {
+  bookingId: string;
+  status: BookingStatus;
+  cancelledAt: string;
+  cancellationReason: string | null;
+}
+
+export type NotificationEventType = 'BOOKING_CREATED' | 'BOOKING_RESCHEDULED' | 'BOOKING_CANCELLED';
+export type NotificationStatus = 'PENDING' | 'SENT' | 'FAILED';
+
+export interface NotificationDelivery {
+  id: string;
+  eventType: NotificationEventType;
+  recipientEmail: string;
+  subject: string;
+  status: NotificationStatus;
+  attempts: number;
+  createdAt: string;
+  sentAt: string | null;
+  errorMessage: string | null;
+}
+
+export interface BookingNotifications {
+  // "logging": el correo solo queda registrado en el servidor; "smtp": se envía de verdad.
+  deliveryMode: string;
+  deliveries: NotificationDelivery[];
+}
+
 export type SlotState = 'AVAILABLE' | 'BOOKED' | 'NO_SERVICE' | 'OUT_OF_HOURS' | 'SELECTED';
 
 export interface TimeSlot {
