@@ -6,7 +6,7 @@
   import { auth } from '$lib/stores/auth';
   import { goto } from '$app/navigation';
   import { toasts } from '$lib/stores/toasts';
-  import type { MfaChallenge, MfaEnrollment, User } from '$lib/types/auth';
+  import type { MfaChallenge, MfaConfirmation, MfaEnrollment, User } from '$lib/types/auth';
   import QRCode from 'qrcode';
 
   type Step = 'credentials' | 'mfa-setup' | 'mfa-verify' | 'recovery-codes';
@@ -27,6 +27,7 @@
   let qrDataUrl = $state<string | null>(null);
   let recoveryCodes = $state<string[]>([]);
   let pendingUser = $state<User | null>(null);
+  let pendingSession = $state<MfaConfirmation['session'] | null>(null);
   let codesSaved = $state(false);
   let skipping = $state(false);
 
@@ -100,7 +101,7 @@
     try {
       if (step === 'mfa-setup') {
         const confirmed = await auth.mfaConfirmEnrollment(challenge.mfaToken, trimmed, trustDevice);
-        pendingUser = confirmed.user;
+        pendingSession = confirmed.session;
         recoveryCodes = confirmed.recoveryCodes;
         codesSaved = false;
         step = 'recovery-codes';
@@ -149,7 +150,10 @@
   }
 
   async function onRecoveryDone() {
-    if (pendingUser) await finish(pendingUser);
+    if (!pendingSession) return;
+    // Recién ahora se inicia la sesión: así la pantalla de códigos no se cierra sola.
+    pendingUser = auth.completeEnrollment(pendingSession);
+    await finish(pendingUser);
   }
 
   function resetToCredentials() {
