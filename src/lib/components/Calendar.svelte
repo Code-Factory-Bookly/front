@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Booking, SlotState, TimeSlot } from '$lib/types/booking';
+  import type { DayOfWeek, ScheduleSlot } from '$lib/types/schedule';
 
   interface Props {
     date: Date;
@@ -9,6 +10,12 @@
     workdayEnd?: number;
     slotMinutes?: number;
     selectedSlot?: string | null;
+    /** Franjas del horario semanal: lo que queda fuera se marca "Fuera de horario". */
+    schedule?: ScheduleSlot[];
+    /** Solo lectura (agenda propia): no invita a seleccionar horas libres. */
+    readonly?: boolean;
+    /** En semana, ajusta el alto a la pantalla para ver todo sin hacer scroll. */
+    fit?: boolean;
     onSlotClick?: (slot: TimeSlot) => void;
   }
 
@@ -20,10 +27,34 @@
     workdayEnd = 20,
     slotMinutes = 30,
     selectedSlot = null,
+    schedule,
+    readonly = false,
+    fit = false,
     onSlotClick
   }: Props = $props();
 
   const slotsPerHour = $derived(60 / slotMinutes);
+
+  const DAYS: DayOfWeek[] = [
+    'SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'
+  ];
+
+  function toMinutes(time: string) {
+    const [h, m] = time.split(':');
+    return Number(h) * 60 + Number(m);
+  }
+
+  function inSchedule(start: Date) {
+    if (!schedule) return true;
+    const day = DAYS[start.getDay()];
+    const minutes = start.getHours() * 60 + start.getMinutes();
+    return schedule.some(
+      (s) =>
+        s.dayOfWeek === day &&
+        minutes >= toMinutes(s.startTime) &&
+        minutes + slotMinutes <= toMinutes(s.endTime)
+    );
+  }
 
   function buildDaySlots(day: Date): TimeSlot[] {
     const out: TimeSlot[] = [];
@@ -33,12 +64,18 @@
     for (let i = 0; i < totalSlots; i++) {
       const start = new Date(base.getTime() + i * slotMinutes * 60_000);
       const end = new Date(start.getTime() + slotMinutes * 60_000);
-      const booking = bookings.find((b) => {
-        const bs = new Date(b.startTime);
-        return bs.getTime() === start.getTime() && b.status !== 'CANCELADA';
-      });
-      const state: SlotState = booking ? 'BOOKED' : 'AVAILABLE';
-      out.push({ start: start.toISOString(), end: end.toISOString(), state, booking });
+      // Una reserva ocupa todas las franjas que cubre, no solo la de inicio.
+      const booking = bookings.find(
+        (b) =>
+          b.status !== 'CANCELADA' && new Date(b.startTime) < end && new Date(b.endTime) > start
+      );
+      const bookingStart = booking ? new Date(booking.startTime) >= start : false;
+      const state: SlotState = booking
+        ? 'BOOKED'
+        : inSchedule(start)
+          ? 'AVAILABLE'
+          : 'OUT_OF_HOURS';
+      out.push({ start: start.toISOString(), end: end.toISOString(), state, booking, bookingStart });
     }
     return out;
   }
@@ -139,19 +176,26 @@
               class:is-hour-mark={isHourMark}
               class:is-selected={isSelected}
               class:is-booked={slot.state === 'BOOKED'}
+              class:is-out={slot.state === 'OUT_OF_HOURS'}
+              class:is-readonly={readonly}
               disabled={slot.state === 'BOOKED'}
               aria-pressed={isSelected}
               aria-label={`${hourLabel} · ${stateLabel(isSelected ? 'SELECTED' : slot.state)}${slot.booking ? ` · ${slot.booking.customerName ?? 'Cliente'}` : ''}`}
               onclick={() => clickSlot(slot)}
             >
-              {#if slot.booking}
+              {#if slot.booking && slot.bookingStart}
                 <span class="day-slot__bar" aria-hidden="true"></span>
                 <span class="day-slot__time">{hourLabel}</span>
                 <span class="day-slot__customer">{slot.booking.customerName ?? 'Cliente'}</span>
                 <span class="day-slot__service">{slot.booking.serviceName ?? 'Servicio'}</span>
+              {:else if slot.booking}
+                <span class="day-slot__time">{hourLabel}</span>
+              {:else if slot.state === 'OUT_OF_HOURS'}
+                <span class="day-slot__time">{hourLabel}</span>
+                <span class="day-slot__hint">Fuera de horario</span>
               {:else}
                 <span class="day-slot__time">{hourLabel}</span>
-                <span class="day-slot__hint">Toca para seleccionar</span>
+                <span class="day-slot__hint">{readonly ? 'Disponible' : 'Toca para seleccionar'}</span>
               {/if}
             </button>
           {/each}
@@ -165,7 +209,7 @@
       </div>
   </div>
 {:else}
-  <div class="cal cal--week" data-od-id="calendar-week">
+  <div class="cal cal--week" class:cal--fit={fit} data-od-id="calendar-week">
     <div class="week-header">
       <div class="week-header__time-spacer" aria-hidden="true"></div>
       {#each weekDays as wd (wd.toISOString())}
@@ -200,12 +244,20 @@
             <button
               type="button"
               class="week-cell week-cell--{isSelected ? 'selected' : slot.state.toLowerCase()}"
-              aria-label={`${wd.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric' })} ${fmtHour(slot.start)} ${stateLabel(isSelected ? 'SELECTED' : slot.state)}`}
+              class:is-start={slot.bookingStart}
+              class:is-readonly={readonly}
+              title={slot.booking
+                ? `${fmtHour(slot.booking.startTime)}–${fmtHour(slot.booking.endTime)} · ${slot.booking.customerName ?? 'Cliente'} · ${slot.booking.serviceName ?? 'Servicio'}`
+                : undefined}
+              aria-label={`${wd.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric' })} ${fmtHour(slot.start)} ${stateLabel(isSelected ? 'SELECTED' : slot.state)}${slot.booking ? ` · ${slot.booking.customerName ?? 'Cliente'}` : ''}`}
               disabled={slot.state === 'BOOKED'}
               onclick={() => clickSlot(slot)}
             >
-              {#if slot.booking}
-                <span class="week-cell__dot" aria-hidden="true"></span>
+              {#if slot.booking && slot.bookingStart}
+                <span class="week-cell__label">
+                  <strong>{slot.booking.customerName ?? 'Cliente'}</strong>
+                  <span>{slot.booking.serviceName ?? 'Servicio'}</span>
+                </span>
               {/if}
             </button>
           {/each}
@@ -323,6 +375,19 @@
     &.is-booked {
       cursor: not-allowed;
       background: rgba(63, 81, 181, 0.06);
+    }
+
+    &.is-out {
+      background: repeating-linear-gradient(
+        135deg,
+        transparent 0 6px,
+        rgba(0, 0, 0, 0.035) 6px 12px
+      );
+      cursor: default;
+    }
+
+    &.is-readonly:not(.is-booked) {
+      cursor: default;
     }
 
     &:disabled {
@@ -492,12 +557,36 @@
     }
 
     &.week-cell--booked {
-      cursor: not-allowed;
-      background: rgba(63, 81, 181, 0.08);
+      cursor: default;
+      background: rgba(63, 81, 181, 0.16);
+      color: $text;
+      opacity: 1;
 
       &:hover {
-        background: rgba(63, 81, 181, 0.12);
+        background: rgba(63, 81, 181, 0.16);
       }
+
+      // Las franjas de continuación se funden con la de inicio: se ve una sola reserva.
+      &:not(.is-start) {
+        border-top-color: transparent;
+      }
+
+      &.is-start {
+        box-shadow: inset 3px 0 0 $plum;
+      }
+    }
+
+    &.week-cell--out_of_hours {
+      cursor: default;
+      background: repeating-linear-gradient(
+        135deg,
+        transparent 0 6px,
+        rgba(0, 0, 0, 0.04) 6px 12px
+      );
+    }
+
+    &.week-cell--available.is-readonly {
+      cursor: default;
     }
 
     &.week-cell--selected {
@@ -506,14 +595,47 @@
     }
   }
 
-  .week-cell__dot {
+  .week-cell__label {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 6px;
-    height: 6px;
-    background: $plum;
-    border-radius: 50%;
+    inset: 1px 4px 0 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-align: left;
+    font-size: $fs-xs;
+    line-height: 1.2;
+    z-index: 1;
+
+    strong {
+      font-weight: $fw-semibold;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    span {
+      color: $muted;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  /* Alto ajustado a la pantalla: las filas se reparten el espacio en vez de crecer. */
+  .cal--fit {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+
+    .week-grid {
+      flex: 1;
+      min-height: 0;
+    }
+
+    .week-cell,
+    .week-time {
+      min-height: 0;
+    }
   }
 </style>

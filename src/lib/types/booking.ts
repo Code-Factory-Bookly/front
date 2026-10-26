@@ -12,7 +12,7 @@ export interface Booking {
   updatedAt: string;
   cancelledAt?: string | null;
   cancellationReason?: string | null;
-  // El backend no los incluye todavía; bookingService los resuelve en el front donde puede.
+  // El backend los incluye en los listados; serviceName se completa desde el catálogo si falta.
   serviceName?: string;
   customerName?: string;
 }
@@ -52,4 +52,6 @@ export interface TimeSlot {
   end: string; // ISO
   state: SlotState;
   booking?: Booking;
+  /** La reserva empieza en esta franja (las siguientes que cubre son solo continuación). */
+  bookingStart?: boolean;
 }
