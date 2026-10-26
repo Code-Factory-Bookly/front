@@ -6,9 +6,9 @@ import type { Booking, BookingNotifications, CancelBookingResult } from '$lib/ty
 const serviceNameCache = new Map<string, string>();
 
 async function withServiceNames(bookings: Booking[]): Promise<Booking[]> {
-  const missing = [...new Set(bookings.map((b) => b.serviceId))].filter(
-    (id) => !serviceNameCache.has(id)
-  );
+  const missing = [
+    ...new Set(bookings.filter((b) => !b.serviceName).map((b) => b.serviceId))
+  ].filter((id) => !serviceNameCache.has(id));
   await Promise.all(
     missing.map(async (id) => {
       try {
@@ -19,7 +19,10 @@ async function withServiceNames(bookings: Booking[]): Promise<Booking[]> {
       }
     })
   );
-  return bookings.map((b) => ({ ...b, serviceName: serviceNameCache.get(b.serviceId) ?? 'Servicio' }));
+  return bookings.map((b) => ({
+    ...b,
+    serviceName: b.serviceName ?? serviceNameCache.get(b.serviceId) ?? 'Servicio'
+  }));
 }
 
 export interface CreateBookingInput {
