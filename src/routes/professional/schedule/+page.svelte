@@ -2,6 +2,7 @@
   import PageHead from '$lib/components/PageHead.svelte';
   import Button from '$lib/components/Button.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
+  import AgendaBlocks from '$lib/components/AgendaBlocks.svelte';
   import { auth } from '$lib/stores/auth';
   import { scheduleService } from '$lib/services/schedule';
   import { toasts } from '$lib/stores/toasts';
@@ -132,6 +133,10 @@
       <Button onclick={save} loading={saving}>Guardar horario</Button>
     </div>
   </section>
+
+  {#if professionalId}
+    <AgendaBlocks {professionalId} />
+  {/if}
 {/if}
 
 <style>

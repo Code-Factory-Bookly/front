@@ -1,13 +1,14 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { auth } from '$lib/stores/auth';
-  import { Home, Search, CalendarDays, UserRound, LogOut, BookOpen } from 'lucide-svelte';
+  import { Home, Search, CalendarDays, UserRound, LogOut, BookOpen, History } from 'lucide-svelte';
   import { goto } from '$app/navigation';
 
   const items = [
     { href: '/customer', label: 'Inicio', icon: Home, exact: true },
     { href: '/customer/services', label: 'Servicios', icon: Search },
     { href: '/customer/agenda', label: 'Mi agenda', icon: CalendarDays },
+    { href: '/customer/history', label: 'Historial', icon: History },
     { href: '/customer/profile', label: 'Perfil', icon: UserRound }
   ];
 

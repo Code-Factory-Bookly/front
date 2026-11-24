@@ -156,8 +156,39 @@
     detailOpen = true;
   }
 
-  // Se trae una sola vez: el backend no filtra por fecha, y el Calendar ya arma el día o la
-  // semana que corresponda a partir de la lista completa.
+  function isoDay(d: Date) {
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60_000);
+    return local.toISOString().slice(0, 10);
+  }
+
+  // HU-14: "Mi agenda" trae como máximo 31 días y sin canceladas. Se pide desde una semana atrás
+  // hasta tres semanas adelante; si el endpoint nuevo falla se usa el anterior, que trae todo.
+  async function loadAgenda(professionalId: string): Promise<Booking[]> {
+    const start = new Date();
+    start.setDate(start.getDate() - 7);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 30);
+    try {
+      const agenda = await bookingService.professionalAgenda(isoDay(start), isoDay(end));
+      return agenda.content.map((item) => ({
+        id: item.id,
+        customerId: '',
+        professionalId,
+        serviceId: '',
+        startTime: item.startTime,
+        endTime: item.endTime,
+        status: item.status,
+        createdAt: item.startTime,
+        updatedAt: item.startTime,
+        serviceName: item.serviceName,
+        customerName: item.customerName
+      }));
+    } catch {
+      return bookingService.listByProfessional(professionalId);
+    }
+  }
+
+  // Se trae una sola vez; el Calendar arma el día o la semana a partir de la lista.
   onMount(async () => {
     const professionalId = $auth.user?.id;
     if (!professionalId) {
@@ -167,7 +198,7 @@
     try {
       // El horario es contexto: si falla, la agenda se muestra igual, solo sin marcar fuera de horario.
       const [list, weekly] = await Promise.all([
-        bookingService.listByProfessional(professionalId),
+        loadAgenda(professionalId),
         scheduleService.get(professionalId).catch(() => null)
       ]);
       bookings = list;

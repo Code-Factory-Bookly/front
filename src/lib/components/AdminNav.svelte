@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { auth } from '$lib/stores/auth';
-  import { LayoutDashboard, CalendarDays, Scissors, UserRound, UserCog, Settings, LogOut, BookOpen, ShieldCheck } from 'lucide-svelte';
+  import { LayoutDashboard, CalendarDays, Scissors, UserRound, UserCog, Settings, LogOut, BookOpen, ShieldCheck, Boxes, ChartColumn } from 'lucide-svelte';
   import { goto } from '$app/navigation';
 
   const items = [
@@ -10,6 +10,8 @@
     { href: '/admin/professionals', label: 'Profesionales', icon: UserRound },
     { href: '/admin/roles', label: 'Roles', icon: UserCog },
     { href: '/admin/agenda', label: 'Agenda', icon: CalendarDays },
+    { href: '/admin/resources', label: 'Recursos', icon: Boxes },
+    { href: '/admin/reports', label: 'Reportes', icon: ChartColumn },
     { href: '/admin/audit', label: 'Auditoría', icon: ShieldCheck },
     { href: '/admin/settings', label: 'Configuración', icon: Settings }
   ];

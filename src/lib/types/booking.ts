@@ -15,6 +15,34 @@ export interface Booking {
   // El backend los incluye en los listados; serviceName se completa desde el catálogo si falta.
   serviceName?: string;
   customerName?: string;
+  professionalName?: string;
+}
+
+// HU-13: historial propio del cliente, paginado y filtrable.
+export interface BookingHistoryPage {
+  content: Booking[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  message: string | null;
+}
+
+// HU-14: "Mi agenda" del profesional; solo trae lo necesario para planificar la jornada.
+export interface ProfessionalAgendaItem {
+  id: string;
+  startTime: string;
+  endTime: string;
+  customerName: string;
+  serviceName: string;
+  status: BookingStatus;
+}
+
+export interface ProfessionalAgenda {
+  from: string;
+  to: string;
+  content: ProfessionalAgendaItem[];
+  message: string | null;
 }
 
 export interface CancelBookingResult {
