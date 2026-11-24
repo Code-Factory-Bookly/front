@@ -1,5 +1,10 @@
-export type AuditActionType = 'BOOKING_CREATED' | 'BOOKING_CANCELLED' | 'ROLE_CHANGED';
-export type AuditResourceType = 'BOOKING' | 'USER';
+export type AuditActionType =
+  | 'BOOKING_CREATED'
+  | 'BOOKING_CANCELLED'
+  | 'ROLE_CHANGED'
+  | 'REPORT_VIEWED'
+  | 'CUSTOMER_HISTORY_VIEWED';
+export type AuditResourceType = 'BOOKING' | 'USER' | 'REPORT';
 
 export interface AuditLogEntry {
   id: string;
