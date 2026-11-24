@@ -21,8 +21,25 @@
     { value: 'ALL', label: 'Todas' },
     { value: 'BOOKING_CREATED', label: 'Reservas creadas' },
     { value: 'BOOKING_CANCELLED', label: 'Reservas canceladas' },
-    { value: 'ROLE_CHANGED', label: 'Cambios de rol' }
+    { value: 'ROLE_CHANGED', label: 'Cambios de rol' },
+    { value: 'REPORT_VIEWED', label: 'Consultas de reportes' }
   ];
+
+  const REPORT_LABELS: Record<string, string> = {
+    'HU-15': 'Reporte de ocupación',
+    'HU-16': 'Reporte general'
+  };
+
+  const PERIOD_LABELS: Record<string, string> = {
+    SEMANA: 'últimos 7 días',
+    MES: 'últimos 30 días'
+  };
+
+  const RESOURCE_LABELS: Record<string, string> = {
+    BOOKING: 'Reserva',
+    USER: 'Usuario',
+    REPORT: 'Reporte'
+  };
 
   const ROLE_LABELS: Record<string, string> = {
     CUSTOMER: 'Cliente',
@@ -89,7 +106,13 @@
   function actionLabel(type: AuditActionType) {
     if (type === 'BOOKING_CREATED') return 'Reserva creada';
     if (type === 'BOOKING_CANCELLED') return 'Reserva cancelada';
+    if (type === 'REPORT_VIEWED') return 'Consulta de reporte';
+    if (type === 'CUSTOMER_HISTORY_VIEWED') return 'Consulta de historial';
     return 'Cambio de rol';
+  }
+
+  function fmtDay(iso: string) {
+    return new Date(`${iso}T00:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
   }
 
   function fmtDateTime(iso: string) {
@@ -108,6 +131,15 @@
       const prev = ROLE_LABELS[m.previousRole] ?? m.previousRole;
       const next = ROLE_LABELS[m.newRole] ?? m.newRole;
       return `${prev} → ${next}`;
+    }
+    if (entry.actionType === 'REPORT_VIEWED') {
+      const report = REPORT_LABELS[m.report] ?? 'Reporte';
+      const period = m.period ? PERIOD_LABELS[m.period] ?? m.period : 'rango propio';
+      const range = m.from && m.to ? `${fmtDay(m.from)} – ${fmtDay(m.to)}` : null;
+      return [report, period, range].filter(Boolean).join(' · ');
+    }
+    if (entry.actionType === 'CUSTOMER_HISTORY_VIEWED') {
+      return 'Historial de reservas de un cliente';
     }
     const service = (m.serviceId && serviceNames.get(m.serviceId)) || 'Servicio';
     const professional = m.professionalId ? professionalNames.get(m.professionalId) : undefined;
@@ -128,7 +160,7 @@
 <PageHead
   eyebrow="Seguridad"
   title="Auditoría."
-  description="Registro de las acciones críticas de la plataforma: reservas creadas y canceladas, y cambios de rol."
+  description="Registro de las acciones críticas de la plataforma: reservas creadas y canceladas, cambios de rol y consultas de información sensible."
 >
   {#snippet actions()}
     <Button variant="ghost" onclick={() => load()}>
@@ -172,7 +204,8 @@
             <p class="entry__detail">{describe(e)}</p>
             <p class="entry__meta">
               {e.actorName ?? 'Cuenta eliminada'}{e.actorEmail ? ` · ${e.actorEmail}` : ''}
-              · {e.resourceType === 'BOOKING' ? 'Reserva' : 'Usuario'} {shortId(e.resourceId)}
+              · {RESOURCE_LABELS[e.resourceType] ?? e.resourceType} {shortId(e.resourceId)}
+              {#if e.sourceIp}· IP {e.sourceIp}{/if}
             </p>
           </div>
           <time class="entry__time" datetime={e.occurredAt}>{fmtDateTime(e.occurredAt)}</time>
@@ -287,9 +320,16 @@
     background: rgba(200, 80, 80, 0.1);
   }
 
-  .entry__badge--role_changed {
+  .entry__badge--role_changed,
+  .entry__badge--customer_history_viewed {
     color: $plum;
     background: $plum-soft;
+  }
+
+  .entry__badge--report_viewed {
+    color: color.adjust($plum, $lightness: 10%);
+    background: rgba(58, 42, 82, 0.06);
+    border: 1px solid $border;
   }
 
   .entry__main {
