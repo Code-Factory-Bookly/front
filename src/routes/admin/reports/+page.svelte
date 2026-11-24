@@ -130,6 +130,21 @@
   const hasCapacity = $derived(
     !!occupancy && occupancy.byDayOfWeek.some((d) => d.capacityMinutes > 0 || d.bookedMinutes > 0)
   );
+
+  // La tabla muestra a quienes tienen horario en el periodo, de mayor a menor ocupación.
+  // Los que no tienen horario se resumen en una nota: su ocupación no es calculable,
+  // aunque sus minutos reservados sí suman en el total.
+  const professionalsWithSchedule = $derived(
+    (occupancy?.byProfessional ?? [])
+      .filter((p) => p.capacityMinutes > 0)
+      .sort(
+        (a, b) =>
+          (b.occupancyPercent ?? 0) - (a.occupancyPercent ?? 0) ||
+          a.professionalName.localeCompare(b.professionalName, 'es')
+      )
+  );
+  const withoutSchedule = $derived((occupancy?.byProfessional ?? []).filter((p) => p.capacityMinutes <= 0));
+  const withoutScheduleBooked = $derived(withoutSchedule.reduce((sum, p) => sum + p.bookedMinutes, 0));
 </script>
 
 <svelte:head>
@@ -223,7 +238,7 @@
             <tr><th>Profesional</th><th>Reservado</th><th>Capacidad</th><th>Ocupación</th></tr>
           </thead>
           <tbody>
-            {#each occupancy.byProfessional as p (p.professionalId)}
+            {#each professionalsWithSchedule as p (p.professionalId)}
               <tr>
                 <td>{p.professionalName}</td>
                 <td>{hours(p.bookedMinutes)}</td>
@@ -233,6 +248,15 @@
             {/each}
           </tbody>
         </table>
+        {#if withoutSchedule.length > 0}
+          <p class="card__hint table__note">
+            {withoutSchedule.length}
+            {withoutSchedule.length === 1 ? 'profesional sin horario' : 'profesionales sin horario'} en el periodo no
+            {withoutSchedule.length === 1 ? 'aparece' : 'aparecen'} en la tabla{withoutScheduleBooked > 0
+              ? `; sus ${hours(withoutScheduleBooked)} reservadas sí cuentan en el total`
+              : ''}.
+          </p>
+        {/if}
       </div>
     </div>
   {/if}
@@ -501,6 +525,10 @@
 
   .table__pct {
     font-weight: $fw-medium;
+  }
+
+  .table__note {
+    margin-top: $space-3;
   }
 
   .stats {
